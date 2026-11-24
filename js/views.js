@@ -815,6 +815,10 @@
               '<button class="chip-btn ' + (entry.exercise && entry.exercise.cardio ? 'on' : '') + '" data-act="toggle-exercise" data-kind="cardio" aria-pressed="' + !!(entry.exercise && entry.exercise.cardio) + '">유산소</button>' +
             '</span>' +
           '</div>' +
+          '<div class="ex-note">' +
+            '<label class="ex-note-head" for="ex-note"><b>운동 비고</b><span>유산소 종류·시간, 웨이트 시간</span></label>' +
+            '<textarea id="ex-note" class="memo ex-note-input" data-field="exerciseNote" rows="2" maxlength="300" placeholder="유산소 종류·시간, 웨이트 시간 등 자유롭게 적어 주세요 (예: 러닝 30분, 하체 웨이트 40분)">' + esc((entry.exercise && entry.exercise.note) || '') + '</textarea>' +
+          '</div>' +
           (M.cycleSettings(p).isFemale ? switchRow('menstruation', '생리', '기록용', !!entry.menstruation) : '') +
           switchRow('bowel', '대변', '기록', !!entry.bowel) +
         '</div>' +
@@ -957,7 +961,6 @@
     return '<section class="week-block">' +
       '<div class="week-block-head"><span class="week-title">' + esc(o.title) + '</span><span class="week-sub">' + esc(o.subtitle) + '</span></div>' +
       '<div class="wk-briefs">' + o.briefs.filter(Boolean).map(briefCard).join('') + '</div>' +
-      (o.advice ? adviceCard(o.advice, { cls: 'board-advice' }) : '') +
       foodChipsBlock(o.food) +
       weekFastLine(o.list, o.week) +
       '<div class="board-grid ' + (o.gridCls || '') + '">' + o.list.map(cell).join('') + '</div>' +
@@ -990,7 +993,7 @@
     if (String(d.week) === 'all') {
       body += boardBlock({
         title: '1~3일차', subtitle: 'D1~3 · 당질 제한 · 장 해독',
-        briefs: [Program.detox], advice: adviceFor(1), food: { allow: Program.detox.chips, avoid: Program.detox.forbiddenChips },
+        briefs: [Program.detox], food: { allow: Program.detox.chips, avoid: Program.detox.forbiddenChips },
         list: d13, week: 1, gridCls: 'span3'
       });
       body += boardBlock({
@@ -1002,14 +1005,14 @@
         var wkList = days.filter(function (x) { return x.week === w.week; });
         body += boardBlock({
           title: w.title, subtitle: w.subtitle,
-          briefs: [(Program.periods || [])[w.week]], advice: adviceFor(wkList.length ? wkList[0].day : w.week * 7 - 6),
+          briefs: [(Program.periods || [])[w.week]],
           food: blockFood(w.week), list: wkList, week: w.week
         });
       });
     } else if (String(d.week) === '1') {
       body += boardBlock({
         title: '1~3일차', subtitle: 'D1~3 · 당질 제한 · 장 해독',
-        briefs: [Program.detox], advice: adviceFor(1), food: { allow: Program.detox.chips, avoid: Program.detox.forbiddenChips },
+        briefs: [Program.detox], food: { allow: Program.detox.chips, avoid: Program.detox.forbiddenChips },
         list: d13, week: 1, gridCls: 'span3 big', cards: true
       });
       body += boardBlock({
@@ -1023,7 +1026,7 @@
       var list = days.filter(function (x) { return x.week === wk; });
       body += boardBlock({
         title: w.title, subtitle: w.summary,
-        briefs: [(Program.periods || [])[wk]], advice: adviceFor(list.length ? list[0].day : wk * 7 - 6),
+        briefs: [(Program.periods || [])[wk]],
         food: blockFood(wk), list: list, week: wk, gridCls: 'big', cards: true
       });
     }
@@ -1043,10 +1046,11 @@
     return typeof v === 'number' && !isNaN(v) ? v.toFixed(dg) : '—';
   }
 
-  function seriesBlock(key, label, values, showX, unit, digits) {
+  function seriesBlock(key, label, values, showX, unit, digits, dates) {
     var dg = digits === undefined ? 1 : digits;
     var u = unit || 'kg';
     var labels = ['시작', '1주', '2주', '3주', '4주'];
+    var dt = dates || [];
     var nums = values.filter(function (v) { return typeof v === 'number' && !isNaN(v); });
     var color = metricColor(key);
     var head = '<div class="cs-head"><span class="cs-name"><i style="background:' + color + '"></i>' + label + '</span>';
@@ -1063,7 +1067,7 @@
     min = Math.round((min - pad) * 10) / 10;
     max = Math.round((max + pad) * 10) / 10;
 
-    var W = 320, H = showX ? 92 : 72, pl = 30, pr = 14, pt = 8, pb = showX ? 18 : 8;
+    var W = 320, H = showX ? 104 : 80, pl = 30, pr = 14, pt = 14, pb = showX ? 28 : 12;
     var iw = W - pl - pr, ih = H - pt - pb;
     function x(i) { return pl + (iw * i) / 4; }
     function y(v) { return pt + ih - ((v - min) / (max - min)) * ih; }
@@ -1084,24 +1088,42 @@
       if (typeof v !== 'number' || isNaN(v)) return;
       dots += '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(v).toFixed(1) + '" r="2.6" fill="#fff" stroke="' + color + '" stroke-width="1.8"/>';
     });
+    /* 점 위(위가 막히면 아래)에 작은 수치 — x 간격이 넓어 서로 겹치지 않는다 */
+    var vlabels = '';
+    values.forEach(function (v, i) {
+      if (typeof v !== 'number' || isNaN(v)) return;
+      var tx = x(i), py = y(v);
+      var anchor = i === 0 ? 'start' : i === values.length - 1 ? 'end' : 'middle';
+      var bx = i === 0 ? tx + 3 : i === values.length - 1 ? tx - 3 : tx;
+      var above = py - 5;
+      var ty = above >= pt + 7 ? above : py + 12;
+      vlabels += '<text x="' + bx.toFixed(1) + '" y="' + ty.toFixed(1) + '" class="chart-vlabel" text-anchor="' + anchor + '">' + v.toFixed(dg) + '</text>';
+    });
     var axis = '';
     if (showX) {
       labels.forEach(function (lb, i) {
         axis += '<line x1="' + x(i).toFixed(1) + '" y1="' + pt + '" x2="' + x(i).toFixed(1) + '" y2="' + (pt + ih) + '" class="chart-vgrid"/>' +
-          '<text x="' + x(i).toFixed(1) + '" y="' + (H - 5) + '" class="chart-xlabel" text-anchor="middle">' + lb + '</text>';
+          '<text x="' + x(i).toFixed(1) + '" y="' + (H - 14) + '" class="chart-xlabel" text-anchor="middle">' + lb + '</text>' +
+          (dt[i] ? '<text x="' + x(i).toFixed(1) + '" y="' + (H - 4) + '" class="chart-xdate" text-anchor="middle">' + esc(dt[i]) + '</text>' : '');
       });
     }
     return '<div class="chart-series">' + head +
       '<svg viewBox="0 0 ' + W + ' ' + H + '" class="chart" role="img" aria-label="' + label + ' 주차별 추이">' +
-      grid + axis + '<path d="' + path.trim() + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' + dots +
+      grid + axis + '<path d="' + path.trim() + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' + dots + vlabels +
       '</svg></div>';
   }
 
   function metricChart(wm) {
     var pts = [wm.start ? { weight: wm.start.weight, muscle: wm.start.muscle, fat: wm.start.fat, visceral: wm.start.visceral } : {}];
+    /* x축에 주차별 날짜(입력한 측정일, 없으면 해당 주차 기준일) */
+    var xdates = [wm.start && wm.start.date ? M.fmtShort(wm.start.date) : ''];
     wm.weeks.forEach(function (w) {
       if (w.value && !w.excluded) pts.push({ weight: w.value.weight, muscle: w.value.muscle, fat: w.value.fat, visceral: w.value.visceral });
       else pts.push({});
+    });
+    wm.weeks.forEach(function (w) {
+      var d = (w.value && w.value.date) ? w.value.date : (w.targetDate || '');
+      xdates.push(d ? M.fmtShort(d) : '');
     });
     var pointCount = pts.filter(function (p) {
       return ['weight', 'muscle', 'fat', 'visceral'].some(function (k) { return typeof p[k] === 'number' && !isNaN(p[k]); });
@@ -1110,10 +1132,10 @@
       return '<div class="chart-box"><div class="chart-empty">' + icon('sparkle') + '<p>인바디를 2회 이상 기록하면<br>주차별 그래프가 그려져요.</p></div></div>';
     }
     return '<div class="chart-box">' +
-      seriesBlock('weight', '몸무게', pts.map(function (p) { return p.weight; }), false, 'kg', 1) +
-      seriesBlock('muscle', '골격근량', pts.map(function (p) { return p.muscle; }), false, 'kg', 1) +
-      seriesBlock('fat', '체지방량', pts.map(function (p) { return p.fat; }), true, 'kg', 1) +
-      seriesBlock('visceral', '내장지방레벨', pts.map(function (p) { return p.visceral; }), false, '레벨', 0) +
+      seriesBlock('weight', '몸무게', pts.map(function (p) { return p.weight; }), false, 'kg', 1, xdates) +
+      seriesBlock('muscle', '골격근량', pts.map(function (p) { return p.muscle; }), false, 'kg', 1, xdates) +
+      seriesBlock('fat', '체지방량', pts.map(function (p) { return p.fat; }), true, 'kg', 1, xdates) +
+      seriesBlock('visceral', '내장지방레벨', pts.map(function (p) { return p.visceral; }), false, '레벨', 0, xdates) +
       '</div>';
   }
 
@@ -1680,11 +1702,12 @@
         '<td>' + (M.photoCount(e) ? M.photoCount(e) + '장' : '—') + '</td>' +
         '<td>' + done + '</td>' +
         '<td class="memo-cell">' + esc(e.memo || '') + '</td>' +
+        '<td class="memo-cell">' + esc((e.exercise && e.exercise.note) || '') + '</td>' +
         '</tr>';
     }).join('');
     var table = '<section class="card">' +
       '<div class="card-head"><h2>일별 기록</h2></div>' +
-      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Day</th><th>달성률</th><th>몸무게</th><th>골격근</th><th>체지방</th><th>내장지방</th><th>사진</th><th>기록</th><th>메모</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Day</th><th>달성률</th><th>몸무게</th><th>골격근</th><th>체지방</th><th>내장지방</th><th>사진</th><th>기록</th><th>메모</th><th>운동 메모</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
     '</section>';
 
     var photos = '<section class="card">' +

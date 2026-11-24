@@ -23,7 +23,7 @@
       water: typeof o.water === 'number' ? o.water : 0,
       fasting14: !!o.f14,
       sleep: !!o.sleep,
-      exercise: { weight: !!o.wt, cardio: !!o.cd },
+      exercise: { weight: !!o.wt, cardio: !!o.cd, note: o.exNote || '' },
       menstruation: !!o.men,
       bowel: !!o.bowel,
       memo: o.memo || '',
@@ -71,6 +71,7 @@
     p1.entries['1'] = mkEntry(p1, 1, {
       weight: 61.5, muscle: 21.5, fat: 21.0, visceral: 5,
       water: 0, sm: false, se: false, noMeals: true,
+      exNote: '가벼운 걷기 20분으로 시작',
       memo: '오늘부터 28일 시작!' });
     p1.feedback.push({
       id: 'f1',
@@ -107,6 +108,7 @@
         sm: d % 7 !== 0,
         se: d % 9 !== 0,
         miss: d % 5 === 0 ? ['snack'] : null,
+        exNote: d === 10 ? '계단 오르내리기 20분, 하체 웨이트 30분' : '',
         memo: d === 10 ? '24시간 단식 첫날, 오후가 힘들었지만 해냈어요.' : ''
       });
     }

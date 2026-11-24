@@ -1837,6 +1837,14 @@
       await updateEntry({ memo: el.value });
       return;
     }
+    if (field === 'exerciseNote') {
+      var curEx = M.getEntry(state.participant, viewDay());
+      if (!curEx && !el.value) return;
+      var noteNow = (curEx && curEx.exercise && curEx.exercise.note) || '';
+      if (noteNow === el.value) return;
+      await updateEntry({ exercise: { note: el.value } });
+      return;
+    }
     if (field === 'date') {
       var entry = M.getEntry(state.participant, viewDay());
       if (!entry) { toast('다른 기록을 먼저 입력하면 날짜가 함께 저장돼요'); return; }

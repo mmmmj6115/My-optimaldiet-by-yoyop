@@ -1126,7 +1126,7 @@
     return toCsv(rows);
   }
   function detailCsv(participant, today) {
-    var rows = [['참여자', 'Day', '날짜', '아침계획', '아침체크', '점심계획', '점심체크', '간식계획', '간식체크', '저녁계획', '저녁체크', '몸무게(kg)', '골격근량(kg)', '체지방량(kg)', '내장지방레벨', '인증사진(장)', '아침영양제', '저녁영양제', '물(잔)', '공복시간', '수면', '웨이트', '유산소', '생리', '대변', '달성률(%)', '메모']];
+    var rows = [['참여자', 'Day', '날짜', '아침계획', '아침체크', '점심계획', '점심체크', '간식계획', '간식체크', '저녁계획', '저녁체크', '몸무게(kg)', '골격근량(kg)', '체지방량(kg)', '내장지방레벨', '인증사진(장)', '아침영양제', '저녁영양제', '물(잔)', '공복시간', '수면', '웨이트', '유산소', '생리', '대변', '달성률(%)', '메모', '운동 메모']];
     var cur = currentDay(participant, today);
     boardDays(participant, today).forEach(function (d) {
       if (d.day > (cur || 1)) return;
@@ -1151,7 +1151,8 @@
         ex.weight ? 'O' : 'X', ex.cardio ? 'O' : 'X',
         e.menstruation ? 'O' : 'X', e.bowel ? 'O' : 'X',
         d.score.pct,
-        e.memo || ''
+        e.memo || '',
+        (ex.note || '')
       ]);
     });
     return toCsv(rows);
