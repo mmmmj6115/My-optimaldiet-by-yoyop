@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="마이옵티멀다이어트 28일 루틴">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#35B189"/>
+      <stop offset="1" stop-color="#1B6B50"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#g)"/>
+  <circle cx="256" cy="238" r="104" fill="none" stroke="#FFFFFF" stroke-opacity="0.32" stroke-width="18"/>
+  <path d="M256 160c8 44 30 66 74 74-44 8-66 30-74 74-8-44-30-66-74-74 44-8 66-30 74-74z" fill="#FFFFFF"/>
+  <path d="M330 300c4 20 14 30 34 34-20 4-30 14-34 34-4-20-14-30-34-34 20-4 30-14 34-34z" fill="#C9F2DF"/>
+  <text x="256" y="416" text-anchor="middle" font-family="-apple-system, 'Apple SD Gothic Neo', 'Pretendard', sans-serif" font-size="76" font-weight="800" fill="#FFFFFF" letter-spacing="-2">28</text>
+</svg>

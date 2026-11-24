@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="마이옵티멀다이어트 28일 루틴">
+  <rect width="512" height="512" fill="#1F7A5C"/>
+  <circle cx="256" cy="238" r="86" fill="none" stroke="#FFFFFF" stroke-opacity="0.32" stroke-width="16"/>
+  <path d="M256 172c7 38 26 57 64 64-38 7-57 26-64 64-7-38-26-57-64-64 38-7 57-26 64-64z" fill="#FFFFFF"/>
+  <path d="M322 296c3 17 12 26 29 29-17 3-26 12-29 29-3-17-12-26-29-29 17-3 26-12 29-29z" fill="#C9F2DF"/>
+  <text x="256" y="398" text-anchor="middle" font-family="-apple-system, 'Apple SD Gothic Neo', 'Pretendard', sans-serif" font-size="66" font-weight="800" fill="#FFFFFF">28</text>
+</svg>

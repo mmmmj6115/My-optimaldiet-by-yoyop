@@ -1,0 +1,28 @@
+{
+  "name": "마이옵티멀다이어트 28일 루틴",
+  "short_name": "마이옵티멀",
+  "description": "28일 루틴 데일리 체크보드 — 식단·운동·인바디 기록과 주차별 변화",
+  "lang": "ko",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F3F6F2",
+  "theme_color": "#1F7A5C",
+  "categories": ["health", "fitness", "lifestyle"],
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
