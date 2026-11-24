@@ -451,11 +451,11 @@
     etc: { key: 'etc', label: '기타' }
   };
 
-  var COUPANG_DISCLOSURE = '이 게시물은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받을 수 있습니다.';
+  var COUPANG_DISCLOSURE = '쿠팡 파트너스 활동의 일환으로, 이에 따른 소정의 수수료를 제공받습니다.';
 
   var PROGRAM = {
     id: 'my-optimal-diet',
-    version: '1.5.0',
+    version: '1.6.0',
     name: '마이옵티멀다이어트',
     title: '28일 루틴',
     totalDays: 28,

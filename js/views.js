@@ -122,6 +122,34 @@
     return '<span class="chip tone-' + t.tone + (small ? ' sm' : '') + '">' + esc(t.label) + '</span>';
   }
 
+  /* ---------- 생리주기 배지 ---------- */
+  function cycleChip(info, cls) {
+    if (!info) return '';
+    return '<span class="cycle-chip tone-' + esc(info.tone) + (cls ? ' ' + cls : '') + '">' + esc(info.badge) + '</span>';
+  }
+
+  function cycleShortChip(info, cls) {
+    if (!info) return '';
+    return '<span class="cycle-chip sm tone-' + esc(info.tone) + (cls ? ' ' + cls : '') + '">' + esc(info.shortBadge) + '</span>';
+  }
+
+  /* 오늘 화면 상단: 오늘의 주기 배지 + 짧은 안내 (여성만 · 미입력이면 안내만) */
+  function cycleBlock(d) {
+    var cs = M.cycleSettings(d.participant);
+    if (!cs.isFemale) return '';
+    var info = M.cyclePhase(d.participant, d.date);
+    if (!info) {
+      return '<div class="cycle-strip missing" id="cycle-strip">' +
+        '<span class="cycle-chip missing">🌈 생리주기 미입력</span>' +
+        '<span class="cycle-note">튜토리얼에서 최근 생리 시작일을 넣으면 오늘의 단계를 알려드려요.</span>' +
+      '</div>';
+    }
+    return '<div class="cycle-strip tone-' + esc(info.tone) + '" id="cycle-strip">' +
+      cycleChip(info) +
+      '<span class="cycle-note">' + esc(info.note) + '</span>' +
+    '</div>';
+  }
+
   function timeShort(iso) {
     var m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
     return m ? Number(m[2]) + '.' + m[3] + ' ' + m[4] + ':' + m[5] : '';
@@ -246,6 +274,18 @@
   }
 
   /* ---------------- 오늘 상세 공통 조각 ---------------- */
+  /* ---------- 쿠팡 파트너스 고지 ---------- */
+  /* 쿠팡 링크가 들어간 카드·배너에는 고지 문구를 반드시 붙인다 */
+  function isCoupangPromo(promo) {
+    if (!promo) return false;
+    if (promo.type === 'coupang') return true;
+    return /coupang\.(com|co\.kr)/i.test(String(promo.link || ''));
+  }
+
+  function coupangDisclosureHTML(cls) {
+    return '<p class="disclosure coupang-disclosure' + (cls ? ' ' + cls : '') + '">' + esc(Program.promos.coupangDisclosure) + '</p>';
+  }
+
   function sponsorSlot(promo) {
     if (!promo) return '';
     var t = M.promoType(promo);
@@ -253,7 +293,8 @@
       '<span class="sponsor-badge tone-' + t.tone + '">' + esc(t.badge) + '</span>' +
       '<span class="sponsor-text"><b>' + esc(promo.title) + '</b><span>' + esc(promo.memo || t.label) + '</span></span>' +
       icon('chevron', 'sponsor-arrow') +
-      '</button>';
+      '</button>' +
+      (isCoupangPromo(promo) ? coupangDisclosureHTML('slot-disclosure') : '');
   }
 
   function metricField(key, label, entry, delta, prevValue, unit, step) {
@@ -752,7 +793,7 @@
               '<button class="chip-btn ' + (entry.exercise && entry.exercise.cardio ? 'on' : '') + '" data-act="toggle-exercise" data-kind="cardio" aria-pressed="' + !!(entry.exercise && entry.exercise.cardio) + '">유산소</button>' +
             '</span>' +
           '</div>' +
-          switchRow('menstruation', '생리', '기록용', !!entry.menstruation) +
+          (M.cycleSettings(p).isFemale ? switchRow('menstruation', '생리', '기록용', !!entry.menstruation) : '') +
           switchRow('bowel', '대변', '기록', !!entry.bowel) +
         '</div>' +
       '</div>' +
@@ -818,7 +859,7 @@
       ? '<section class="card"><div class="card-head"><h2>관리자 피드백</h2></div>' + feedbackList(d.feedback.slice().reverse(), false) + '</section>'
       : '';
 
-    return hero + daynav + timers + quote + quests + details + sponsorSlot(d.promo) + metrics + memo + feedback;
+    return hero + daynav + cycleBlock(d) + timers + quote + quests + details + sponsorSlot(d.promo) + metrics + memo + feedback;
   }
 
   /* ---------------- 28일 보드 ---------------- */
@@ -1071,6 +1112,7 @@
     var badges = '';
     if (data.excluded) badges += '<span class="tiny-badge warn">단식 다음날 · 제외</span>';
     if (data.isThisWeek) badges += '<span class="tiny-badge">이번 주</span>';
+    if (data.cycle) badges += cycleShortChip(data.cycle, 'wk-cycle');
     var meta = data.value
       ? 'Day ' + data.value.day + ' · ' + M.fmtShort(data.value.date) + ' 기록'
       : (disabled ? '아직 시작 전' : '미입력');
@@ -1089,23 +1131,52 @@
     '</div>';
   }
 
+  /* 인바디 탭의 주차별 추이 영역: 주차 시점의 생리주기 단계 + 수분 정체 안내 */
+  function cycleInbodyNote(p, wm) {
+    var cs = M.cycleSettings(p);
+    if (!cs.isFemale) return '';
+    var cells = [];
+    function push(label, date) {
+      var info = M.cyclePhase(p, date);
+      if (!info) return;
+      cells.push('<span class="cycle-week tone-' + esc(info.tone) + '">' +
+        '<b>' + esc(label) + '</b><em>' + esc(info.shortBadge) + '</em></span>');
+    }
+    push('시작', wm.start ? wm.start.date : M.dayDate(p.startDate, 1));
+    (wm.weeks || []).forEach(function (w) {
+      push(w.label, w.value ? w.value.date : w.targetDate);
+    });
+    if (!cells.length) {
+      return '<div class="cycle-inbody missing" id="cycle-inbody">' +
+        '<p class="cycle-note">🌈 최근 생리 시작일을 튜토리얼에서 넣으면 주차별 생리주기 단계를 함께 보여드려요.</p></div>';
+    }
+    return '<div class="cycle-inbody" id="cycle-inbody">' +
+      '<div class="cycle-week-row">' + cells.join('') + '</div>' +
+      '<p class="cycle-note">🌸 생리 직전에는 수분 정체로 체중·체지방이 일시적으로 정체되거나 올라갈 수 있어요.</p>' +
+    '</div>';
+  }
+
   function inbodyView(d) {
     var wm = d.weekly;
     var p = d.participant;
     var changes = '<div class="change-grid">' + changeCard('몸무게', 'weight', wm) + changeCard('골격근량', 'muscle', wm) + changeCard('체지방량', 'fat', wm) + changeCard('내장지방레벨', 'visceral', wm, '레벨', 0) + '</div>';
     var notice = '<section class="notice-bar">' + icon('sparkle') + '<div><b>주 1회 인바디 체크</b><p>' + esc(wm.notice) + '</p></div></section>';
 
-    var rows = weekRow({ wk: 0, label: '시작 · 1일차', value: wm.start, editable: true, targetDay: 1, targetDate: M.dayDate(p.startDate, 1) });
+    var rows = weekRow({
+      wk: 0, label: '시작 · 1일차', value: wm.start, editable: true, targetDay: 1, targetDate: M.dayDate(p.startDate, 1),
+      cycle: M.cyclePhase(p, wm.start ? wm.start.date : M.dayDate(p.startDate, 1))
+    });
     wm.weeks.forEach(function (w) {
       rows += weekRow({
         wk: w.week, label: w.label, value: w.value, editable: w.editable,
         targetDay: w.targetDay, targetDate: w.targetDate, excluded: w.excluded,
-        isThisWeek: w.startDay <= wm.currentDay && wm.currentDay <= w.endDay
+        isThisWeek: w.startDay <= wm.currentDay && wm.currentDay <= w.endDay,
+        cycle: M.cyclePhase(p, w.value ? w.value.date : w.targetDate)
       });
     });
 
     return notice + changes +
-      '<section class="card"><div class="card-head"><h2>주차별 추이</h2><span class="hint">kg · 레벨</span></div>' + metricChart(wm) + '</section>' +
+      '<section class="card"><div class="card-head"><h2>주차별 추이</h2><span class="hint">kg · 레벨</span></div>' + cycleInbodyNote(p, wm) + metricChart(wm) + '</section>' +
       '<section class="card"><div class="card-head"><h2>주차별 인바디 입력</h2><span class="hint">주 1회</span></div>' +
         '<p class="hint">값을 고치면 그 주에 기록된 날짜에 저장되고, 비어 있으면 이번 주는 오늘·지난 주는 주 마지막 날에 저장돼요.</p>' +
         '<div class="wk-list">' + rows + '</div>' +
@@ -1148,8 +1219,7 @@
   function promoCard(promo) {
     var t = M.promoType(promo);
     var c = M.promoCategory(promo);
-    var disclosure = promo.disclosure || promo.type === 'coupang'
-      ? '<p class="disclosure">' + esc(Program.promos.coupangDisclosure) + '</p>' : '';
+    var disclosure = (isCoupangPromo(promo) || promo.disclosure) ? coupangDisclosureHTML() : '';
     return '<article class="promo-card">' +
       '<div class="promo-card-top">' + promoThumb(promo) +
         '<div class="promo-card-head">' +
@@ -1236,6 +1306,11 @@
     var start = d.start || {};
     var done = !!d.done;
     var nick = d.nickname || '';
+    var gender = d.gender === 'male' ? 'male' : 'female';
+    var cyc = d.cycle || {};
+    var cycleStart = cyc.start || '';
+    var cycleLength = cyc.length === undefined || cyc.length === '' || cyc.length === null ? M.cycleDefaults.cycleLength : cyc.length;
+    var periodDays = cyc.days === undefined || cyc.days === '' || cyc.days === null ? M.cycleDefaults.periodDays : cyc.days;
 
     var head = pageHead('튜토리얼', T.sub || '시작 전에 5분만 읽어두면 28일이 쉬워져요',
       '<span class="week-chip' + (done ? ' is-done' : '') + '">' + (done ? '완료' : '시작 전') + '</span>');
@@ -1247,6 +1322,32 @@
       '<ol class="tut-steps">' + (T.steps || []).map(tutStep).join('') + '</ol>' +
     '</section>';
 
+    /* 성별 선택 — 여성을 고르면 생리주기 입력란이 열리고, 남성이면 숨긴다 */
+    var genderBlock = '<div class="tut-gender" id="tut-gender">' +
+      '<span class="tut-label">성별</span>' +
+      '<div class="segmented gender-seg" role="tablist" aria-label="성별 선택">' +
+        ['female', 'male'].map(function (g) {
+          var on = g === gender;
+          return '<button type="button" role="tab" aria-selected="' + on + '" class="' + (on ? 'on' : '') + '"' +
+            ' data-act="tut-gender" data-value="' + g + '">' + M.genders[g].emoji + ' ' + esc(M.genders[g].label) + '</button>';
+        }).join('') +
+      '</div>' +
+      '<input type="hidden" name="gender" data-tut="gender" value="' + esc(gender) + '">' +
+    '</div>';
+
+    var cycleBlock = '<div class="tut-cycle' + (gender === 'male' ? ' is-off' : '') + '" id="tut-cycle"' + (gender === 'male' ? ' hidden' : '') + '>' +
+      '<div class="tut-cycle-head"><b>🌸 생리주기</b><span class="hint">여성만 입력 · 단계는 자동 계산</span></div>' +
+      '<label class="tut-field wide"><span>최근 생리 시작일</span>' +
+        '<span class="tut-input"><input type="date" name="cycleStart" data-tut="cycleStart" value="' + esc(cycleStart) + '" aria-label="최근 생리 시작일"></span></label>' +
+      '<div class="tut-grid">' +
+        '<label class="tut-field"><span>평균 생리 주기</span>' +
+          '<span class="tut-input"><input type="number" inputmode="numeric" step="1" min="21" max="45" name="cycleLength" data-tut="cycleLength" value="' + esc(cycleLength) + '" aria-label="평균 생리 주기 일수"><em>일</em></span></label>' +
+        '<label class="tut-field"><span>평균 생리 기간</span>' +
+          '<span class="tut-input"><input type="number" inputmode="numeric" step="1" min="2" max="10" name="periodDays" data-tut="periodDays" value="' + esc(periodDays) + '" aria-label="평균 생리 기간 일수"><em>일</em></span></label>' +
+      '</div>' +
+      '<p class="hint">주기는 21~45일, 생리 기간은 2~10일 사이로 넣어주세요. 나중에 언제든 고칠 수 있어요.</p>' +
+    '</div>';
+
     var info = '<section class="card tut-card">' +
       '<div class="card-head"><span class="week-chip">01</span><h2>내 정보 &amp; 시작 인바디</h2></div>' +
       '<div class="tut-profile"><span class="avatar">' + esc(String(nick || '?').slice(0, 1)) + '</span>' +
@@ -1255,6 +1356,8 @@
       '<form id="tutorial-form" class="tut-form" autocomplete="off">' +
         '<label class="tut-field wide"><span>닉네임</span>' +
           '<span class="tut-input"><input type="text" name="nickname" data-tut="nickname" maxlength="12" value="' + esc(nick) + '" placeholder="예: 유니"></span></label>' +
+        genderBlock +
+        cycleBlock +
         '<div class="tut-grid">' +
           tutMetric('weight', '시작 체중', start.weight, 'kg') +
           tutMetric('muscle', '골격근량', start.muscle, 'kg') +
@@ -1444,6 +1547,7 @@
         '<button class="btn primary sm" data-act="promo-new">' + icon('plus') + ' 새 공구·광고</button>' +
       '</div>' +
       '<p class="hint promo-hint">여기서 등록·수정한 내용이 참여자 화면의 배너와 공구 탭에 바로 반영돼요. ON/OFF로 노출을 끌 수 있어요.</p>' +
+      '<p class="hint coupon-hint">쿠팡 추천·쿠팡 링크에는 고지 문구 “' + esc(Program.promos.coupangDisclosure) + '”가 항상 표시돼요.</p>' +
       body +
       '<p class="disclaimer">샘플 3건이 들어 있어요. 실제 링크로 수정하거나 삭제한 뒤 사용하세요. 쿠팡 파트너스 링크는 고지 문구 노출을 켜두는 게 좋아요.</p>';
   }
@@ -1642,8 +1746,8 @@
         '<label class="field"><span>썸네일 이미지 URL <em class="hint">(비우면 기본 아이콘)</em></span><input class="input" name="imageUrl" inputmode="url" placeholder="https://.../image.jpg" value="' + esc(p.imageUrl || '') + '"></label>' +
         '<div class="check-line"><label class="check-field"><input type="checkbox" name="active"' + checked(p.active !== false) + '><span>참여자에게 노출</span></label>' +
         '<label class="check-field"><input type="checkbox" name="featured"' + checked(p.featured) + '><span>오늘 화면 배너에 노출</span></label></div>' +
-        '<label class="check-field"><input type="checkbox" name="disclosure"' + checked(p.disclosure) + '><span>쿠팡 파트너스 고지 문구 표시</span></label>' +
-        '<p class="hint">쿠팡 추천 상품은 고지 문구를 켜두는 게 안전해요.</p>' +
+        '<label class="check-field"><input type="checkbox" name="disclosure"' + checked(p.disclosure) + '><span>고지 문구 추가 표시 (쿠팡 외 링크)</span></label>' +
+        '<p class="hint">쿠팡 추천·쿠팡 링크에는 “' + esc(Program.promos.coupangDisclosure) + '”가 항상 표시돼요.</p>' +
         '<div class="sheet-actions">' +
           (d.isNew ? '' : '<button type="button" class="btn danger-ghost sm" data-act="promo-delete" data-id="' + esc(p.id || '') + '">삭제</button>') +
           '<button type="button" class="btn ghost sm" data-act="close-sheet">취소</button>' +

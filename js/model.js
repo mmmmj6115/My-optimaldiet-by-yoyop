@@ -530,6 +530,130 @@
     return days;
   }
 
+  /* ---------- 성별 · 여성 생리주기 ---------- */
+  var GENDERS = {
+    female: { key: 'female', label: '여성', emoji: '🌸' },
+    male: { key: 'male', label: '남성', emoji: '🌿' }
+  };
+  var CYCLE_DEFAULTS = { gender: 'female', cycleLength: 28, periodDays: 5 };
+
+  /* 형식이 맞고 실제로 존재하는 날짜인지 (2026-02-30 같은 값은 거른다) */
+  function isDateStr(v) {
+    var m = String(v || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return false;
+    var y = Number(m[1]), mo = Number(m[2]), da = Number(m[3]);
+    var d = new Date(y, mo - 1, da);
+    return d.getFullYear() === y && d.getMonth() === mo - 1 && d.getDate() === da;
+  }
+
+  /* 참여자 설정에서 성별 · 생리주기 값을 읽고 범위를 보정한다 (기본: 여성 · 28일 · 5일) */
+  function cycleSettings(participant) {
+    var s = (participant && participant.settings) || {};
+    var gender = s.gender === 'male' ? 'male' : 'female';
+    var len = Number(s.cycleLength);
+    var pd = Number(s.periodDays);
+    if (!isFinite(len) || len < 21 || len > 45) len = CYCLE_DEFAULTS.cycleLength;
+    if (!isFinite(pd) || pd < 2 || pd > 10) pd = CYCLE_DEFAULTS.periodDays;
+    len = Math.round(len);
+    pd = Math.round(pd);
+    if (pd > len) pd = len;
+    var start = isDateStr(s.cycleStart) ? String(s.cycleStart) : null;
+    return {
+      gender: gender,
+      label: GENDERS[gender].label,
+      isFemale: gender === 'female',
+      isMale: gender === 'male',
+      cycleStart: start,
+      cycleLength: len,
+      periodDays: pd,
+      hasCycle: gender === 'female' && !!start
+    };
+  }
+
+  /* 그 날짜가 주기 안에서 몇 일차인지 (1 ~ cycleLength). 시작일이 없으면 null */
+  function cycleDayOn(cs, dateStr) {
+    var c = cs || {};
+    if (!c.cycleStart || !parseDate(dateStr)) return null;
+    var len = Number(c.cycleLength) || CYCLE_DEFAULTS.cycleLength;
+    var offset = diffDays(c.cycleStart, dateStr);
+    var idx = ((offset % len) + len) % len;
+    return idx + 1;
+  }
+
+  /* 4단계 정의 — 생리기 · 황금기 · 배란기·가임기 · 생리전 정체기 */
+  var CYCLE_PHASES = {
+    period: {
+      key: 'period', name: '생리기', emoji: '🌷', short: '생리기', tone: 'period', tagline: '회복이 필요한 시기',
+      note: '체력이 떨어지고 수분 변화가 큰 시기예요. 무리한 운동은 잠시 쉬어가요.'
+    },
+    golden: {
+      key: 'golden', name: '황금기', emoji: '✨', short: '황금기', tone: 'golden', tagline: '감량 최적기',
+      note: '대사가 활발하고 식욕 조절이 쉬운 감량 최적기예요! 운동 강도를 조금 올려도 좋아요.'
+    },
+    ovulation: {
+      key: 'ovulation', name: '배란기·가임기', emoji: '🌿', short: '배란기', tone: 'ovulation', tagline: '체온·식욕 변화 체크',
+      note: '배란을 전후해 체온과 식욕이 달라질 수 있어요. 컨디션을 살펴가며 움직여요.'
+    },
+    luteal: {
+      key: 'luteal', name: '생리전 정체기', emoji: '🌸', short: '정체기', tone: 'luteal', tagline: '붓기 주의',
+      note: '프로게스테론 영향으로 수분 정체·체중 정체·식욕 증가가 자연스러운 시기예요! 체중이 안 빠져도 멘탈 흔들리지 마세요.'
+    }
+  };
+
+  /* 특정 날짜의 생리주기 단계. 여성이 아니거나 시작일이 없으면 null (계산하지 않음) */
+  function cyclePhase(participant, dateStr) {
+    var cs = cycleSettings(participant);
+    if (!cs.hasCycle) return null;
+    var date = isDateStr(dateStr) ? String(dateStr) : null;
+    if (!date) return null;
+    var day = cycleDayOn(cs, date);
+    if (!day) return null;
+    var len = cs.cycleLength;
+    var periodEnd = Math.min(cs.periodDays, len);
+    var ovulationDay = Math.max(1, len - 14);
+    var phaseKey;
+    if (day <= periodEnd) phaseKey = 'period';
+    else if (day >= ovulationDay - 2 && day <= ovulationDay + 2) phaseKey = 'ovulation';
+    else if (day <= ovulationDay - 3) phaseKey = 'golden';
+    else phaseKey = 'luteal';
+    var def = CYCLE_PHASES[phaseKey];
+    /* 다음 생리 시작일까지 남은 일수 (내일 시작이면 D-1) */
+    var daysToPeriod = len - day + 1;
+    var detail, badge, shortBadge;
+    if (phaseKey === 'period') {
+      detail = day + '일차 · ' + def.tagline;
+      badge = def.emoji + ' ' + def.name + ' · ' + detail;
+      shortBadge = def.emoji + ' ' + def.short + ' ' + day + '일차';
+    } else if (phaseKey === 'luteal') {
+      detail = 'D-' + daysToPeriod + ' (' + def.tagline + ')';
+      badge = def.emoji + ' ' + def.name + ' · ' + detail;
+      shortBadge = def.emoji + ' ' + def.short + ' D-' + daysToPeriod;
+    } else if (phaseKey === 'golden') {
+      detail = def.tagline;
+      badge = def.emoji + ' ' + def.name + ' · ' + detail;
+      shortBadge = def.emoji + ' ' + def.short;
+    } else {
+      detail = def.tagline;
+      badge = def.emoji + ' ' + def.name + ' · ' + detail;
+      shortBadge = def.emoji + ' ' + def.short;
+    }
+    return {
+      key: phaseKey, phase: phaseKey,
+      name: def.name, emoji: def.emoji, short: def.short, tone: def.tone, tagline: def.tagline, note: def.note,
+      date: date,
+      cycleDay: day, cycleLength: len, periodDays: cs.periodDays,
+      ovulationDay: ovulationDay, daysToPeriod: daysToPeriod, dday: 'D-' + daysToPeriod,
+      detail: detail, badge: badge, shortBadge: shortBadge
+    };
+  }
+
+  /* 오늘 화면·인바디에서 쓰는 짧은 배지 문자열 (단계가 없으면 '') */
+  function cycleBadgeText(participant, dateStr, short) {
+    var info = cyclePhase(participant, dateStr);
+    if (!info) return '';
+    return short ? info.shortBadge : info.badge;
+  }
+
   /* ---------- 주차별 인바디 ---------- */
   function pickMetrics(m) {
     if (!m) return null;
@@ -1064,6 +1188,14 @@
     fmtDate: fmtDate,
     dayDate: dayDate,
     dayNumberFor: dayNumberFor,
+    isDateStr: isDateStr,
+    cycleSettings: cycleSettings,
+    cycleDayOn: cycleDayOn,
+    cyclePhase: cyclePhase,
+    cycleBadgeText: cycleBadgeText,
+    cyclePhases: CYCLE_PHASES,
+    cycleDefaults: CYCLE_DEFAULTS,
+    genders: GENDERS,
     currentDay: currentDay,
     tutorialDone: tutorialDone,
     isFinished: isFinished,

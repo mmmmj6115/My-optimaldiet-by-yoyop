@@ -325,11 +325,14 @@
       return lv && typeof lv.value === 'number' ? lv.value : '';
     }
     var weight = pick('weight');
+    var cs = M.cycleSettings(p);
     return {
       participant: p,
       nickname: p.nickname || '',
       done: M.tutorialDone(p),
       currentDay: M.currentDay(p, today()),
+      gender: cs.gender,
+      cycle: { start: cs.cycleStart || '', length: cs.cycleLength, days: cs.periodDays },
       start: {
         weight: weight,
         muscle: pick('muscle'),
@@ -1058,9 +1061,14 @@
     if (!form || !form.elements || !form.elements.namedItem) return null;
     function val(name) {
       var el = form.elements.namedItem(name);
-      return el && el.value !== undefined && el.value !== null ? String(el.value).trim() : '';
+      /* 폼에 없는 항목은 undefined로 둔다 (저장된 주기 값을 빈 값으로 지우지 않도록) */
+      if (!el || el.value === undefined || el.value === null) return undefined;
+      return String(el.value).trim();
     }
-    return { nickname: val('nickname'), weight: val('weight'), muscle: val('muscle'), fat: val('fat'), visceral: val('visceral') };
+    return {
+      nickname: val('nickname'), weight: val('weight'), muscle: val('muscle'), fat: val('fat'), visceral: val('visceral'),
+      gender: val('gender'), cycleStart: val('cycleStart'), cycleLength: val('cycleLength'), periodDays: val('periodDays')
+    };
   }
 
   function parseTutorial(raw) {
@@ -1082,6 +1090,29 @@
       if (!isFinite(vnum) || vnum < 1 || vnum > 20) { if (!err) err = '내장지방 레벨은 1~20 사이 숫자로 넣어주세요'; }
       else data.metrics.visceral = Math.round(vnum);
     }
+
+    /* 성별 · 생리주기 (여성일 때만 입력받는다. 남성이면 주기 값은 건드리지 않는다) */
+    if (raw.gender === 'female' || raw.gender === 'male') data.gender = raw.gender;
+    if (data.gender === 'female') {
+      if (raw.cycleStart !== undefined) {
+        var cs = raw.cycleStart === null ? '' : String(raw.cycleStart).trim();
+        if (cs !== '' && !M.isDateStr(cs)) { if (!err) err = '최근 생리 시작일을 날짜로 넣어주세요'; }
+        else data.cycleStart = cs;
+      }
+      var cl = raw.cycleLength;
+      if (cl !== '' && cl !== undefined && cl !== null) {
+        var cln = Number(cl);
+        if (!isFinite(cln) || cln < 21 || cln > 45) { if (!err) err = '평균 생리 주기는 21~45일 사이로 넣어주세요'; }
+        else data.cycleLength = Math.round(cln);
+      }
+      var pdd = raw.periodDays;
+      if (pdd !== '' && pdd !== undefined && pdd !== null) {
+        var pdn = Number(pdd);
+        if (!isFinite(pdn) || pdn < 2 || pdn > 10) { if (!err) err = '평균 생리 기간은 2~10일 사이로 넣어주세요'; }
+        else data.periodDays = Math.round(pdn);
+      }
+    }
+
     if (err) return { ok: false, error: err };
     return { ok: true, data: data };
   }
@@ -1115,10 +1146,22 @@
         });
         updated = await store.updateParticipant(p.id, { settings: settings });
       }
+      /* 성별 · 생리주기는 '입력 저장'만 눌러도 저장한다 (남성이면 주기 값은 그대로 둔다) */
+      var settingsPatch = {};
+      if (data.gender) settingsPatch.gender = data.gender;
+      if (data.gender === 'female') {
+        if (data.cycleStart !== undefined) settingsPatch.cycleStart = data.cycleStart;
+        if (data.cycleLength !== undefined) settingsPatch.cycleLength = data.cycleLength;
+        if (data.periodDays !== undefined) settingsPatch.periodDays = data.periodDays;
+      }
+      if (Object.keys(settingsPatch).length) {
+        var curS = Object.assign({}, ((updated || state.participant || {}).settings) || {}, settingsPatch);
+        updated = await store.updateParticipant(p.id, { settings: curS });
+      }
       if (updated) applyParticipant(updated);
       if (!complete) {
         render();
-        toast('시작 인바디와 닉네임을 저장했어요 · 오늘 화면에 바로 반영돼요');
+        toast('내 정보·생리주기를 저장했어요 · 오늘 화면에 바로 반영돼요');
         return true;
       }
       state.day = M.currentDay(state.participant, today()) || 1;
@@ -1130,6 +1173,25 @@
       toast('저장하지 못했어요: ' + e.message, 'error');
       return false;
     }
+  }
+
+  /* 튜토리얼 성별 선택 — 화면을 다시 그리지 않고 입력란 표시만 바꿔 타이핑한 값을 지킨다 */
+  function setTutorialGender(value) {
+    var gender = value === 'male' ? 'male' : 'female';
+    var doc = global.document;
+    var hidden = doc.querySelector('input[data-tut="gender"]');
+    if (hidden) hidden.value = gender;
+    var group = doc.querySelector('#tut-gender');
+    if (group && group.querySelectorAll) {
+      Array.prototype.forEach.call(group.querySelectorAll('[data-act="tut-gender"]'), function (btn) {
+        var on = btn.getAttribute('data-value') === gender;
+        if (btn.classList) btn.classList.toggle('on', on);
+        btn.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+    }
+    var cycle = doc.querySelector('#tut-cycle');
+    if (cycle) cycle.hidden = gender !== 'female';
+    return gender;
   }
 
   function openPlanSheet() {
@@ -1323,6 +1385,7 @@
       case 'open-profile': openSheet({ type: 'profile' }); break;
       case 'signout': await signOut(); break;
       case 'tutorial-start': await saveTutorial(global.document.getElementById('tutorial-form'), true); break;
+      case 'tut-gender': setTutorialGender(el.getAttribute('data-value')); break;
 
       case 'prev-day':
         state.day = Math.max(1, viewDay() - 1);

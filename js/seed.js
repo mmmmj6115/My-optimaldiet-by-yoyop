@@ -45,6 +45,10 @@
       settings.tutorialDone = true;
       settings.tutorialDoneAt = isoAt(startDate, '07:20');
     }
+    if (opts.gender) settings.gender = opts.gender;
+    if (opts.cycleStart) settings.cycleStart = opts.cycleStart;
+    if (opts.cycleLength) settings.cycleLength = opts.cycleLength;
+    if (opts.periodDays) settings.periodDays = opts.periodDays;
     return {
       id: id,
       name: name,
@@ -75,8 +79,14 @@
       createdAt: isoAt(t, '07:40')
     });
 
-    /* 2) 김서연 — 오늘 Day 16, 꾸준히 기록 중 */
-    var p2 = participant('p2', '김서연', '2751', M.addDays(t, -15), '서연', { tutorialDone: true });
+    /* 2) 김서연 — 오늘 Day 16, 꾸준히 기록 중 (여성 · 생리주기 입력됨) */
+    var p2 = participant('p2', '김서연', '2751', M.addDays(t, -15), '서연', {
+      tutorialDone: true,
+      gender: 'female',
+      cycleStart: M.addDays(t, -12),
+      cycleLength: 28,
+      periodDays: 5
+    });
     var w2 = 61.2, m2 = 21.4, f2 = 24.1, v2 = 8;
     for (var d = 1; d <= 16; d++) {
       w2 = M.round1(w2 - 0.18);
