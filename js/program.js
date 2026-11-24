@@ -453,7 +453,7 @@
 
   var PROGRAM = {
     id: 'my-optimal-diet',
-    version: '1.4.0',
+    version: '1.5.0',
     name: '마이옵티멀다이어트',
     title: '28일 루틴',
     totalDays: 28,
@@ -475,6 +475,7 @@
       waterTarget: 8,
       fastingHours: 14,
       fast24Hours: 24,
+      fastMinHours: 18,
       sleepHours: 7,
       /* 타이머 기본 시각 (참여자가 직접 수정) */
       lastMeal: '19:30',

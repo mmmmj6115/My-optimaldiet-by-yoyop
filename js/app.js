@@ -286,7 +286,8 @@
       body: M.latestValues(p, day, ['weight', 'fat', 'visceral']),
       prefs: prefs,
       fasting: M.fastingState(prefs.lastMeal, now, Program.check.fastingHours),
-      fasting24: M.fastingState(prefs.lastMeal, now, Program.check.fast24Hours),
+      fast24: M.fast24State(p, day, now, Program.check.fast24Hours),
+      fastPrev: M.fastPrevMeal(p, day),
       sleep: M.sleepState(prefs.wake, now, Program.check.sleepHours),
       dinner: M.dinnerState(prefs.wake, now, M.dinnerMode(p, day)),
       quote: M.quoteFor(day),
@@ -393,6 +394,8 @@
     var html = '';
     if (s.type === 'plan') {
       html = Views.planSheet({ day: s.day, draft: s.draft, conflict: s.conflict });
+    } else if (s.type === 'fastMove') {
+      html = Views.fastMoveSheet(fastMoveData(s.week, s.fromDay));
     } else if (s.type === 'promo') {
       html = Views.promoSheet({ promo: s.promo, isNew: s.isNew });
     } else if (s.type === 'add') {
@@ -551,11 +554,38 @@
     if (!norm) { toast('시각을 확인해주세요', 'error'); return; }
     var settings = Object.assign({}, p.settings || {});
     settings[key] = norm;
+    /* 그 날의 마지막 식사 시각을 남겨두면 다음 날 단식일 24시간 타이머가 자동으로 맞춰진다 */
+    if (key === 'lastMeal') {
+      settings.lastMeals = Object.assign({}, (settings.lastMeals && typeof settings.lastMeals === 'object') ? settings.lastMeals : {});
+      settings.lastMeals[String(viewDay())] = norm;
+    }
     try {
       var updated = await store.updateParticipant(p.id, { settings: settings });
       applyParticipant(updated);
       tickTimers();
       toast(key === 'lastMeal' ? '마지막 식사 시각을 ' + norm + '으로 저장했어요' : '기상 목표를 ' + norm + '으로 저장했어요');
+    } catch (e) {
+      toast('저장하지 못했어요: ' + e.message, 'error');
+    }
+  }
+
+  /* 단식일 24시간 타이머의 기준 시각(전날 마지막 식사)은 그 날짜에만 적용해 저장한다 */
+  async function saveFastPrevMeal(value) {
+    var p = state.participant;
+    if (!p) return;
+    var norm = M.normHM(value, '');
+    if (!norm) { toast('시각을 확인해주세요', 'error'); return; }
+    var day = viewDay();
+    var settings = Object.assign({}, p.settings || {});
+    settings.fastPrevMeal = Object.assign({}, (settings.fastPrevMeal && typeof settings.fastPrevMeal === 'object') ? settings.fastPrevMeal : {});
+    settings.fastPrevMeal[String(day)] = norm;
+    settings.fastingPrevMealAt = norm;
+    try {
+      var updated = await store.updateParticipant(p.id, { settings: settings });
+      applyParticipant(updated);
+      render();
+      tickTimers();
+      toast('Day ' + day + ' 단식 기준 시각을 ' + norm + '으로 맞췄어요');
     } catch (e) {
       toast('저장하지 못했어요: ' + e.message, 'error');
     }
@@ -577,7 +607,7 @@
   function setRunner(id, pct) {
     var el = $(id);
     if (!el || !el.style) return;
-    var v = Math.max(3, Math.min(97, pct));
+    var v = Math.max(3, Math.min(100, pct));
     el.style.left = v + '%';
     var goal = $(id + '-goal');
     if (goal && 'textContent' in goal) goal.textContent = pct >= 100 ? '🏆' : '🏁';
@@ -595,9 +625,30 @@
     setHtmlIfChanged($('t-fast-note'), Views.esc((f.startToday ? '오늘 ' : '어제 ') + f.startClock + ' 마지막 식사 · ' + f.hours + '시간 공복까지'));
     setWidth('t-fast-bar', f.pct);
     setRunner('t-fast-run', f.pct);
-    if (f24 && $('t-fast-24')) {
-      setHtmlIfChanged($('t-fast-24'), '24시간 단식 기준 ' + (f24.done ? '24시간 달성 · 물·허브티만 🎉' : Views.esc(f24.leftText) + ' 남았어요'));
-    }
+  }
+
+  /* 단식일 24시간 타이머 1초 갱신 */
+  function paintFasting24(s) {
+    if (!s) return;
+    var cap = (s.isViewToday ? '전날 ' : M.fmtShort(s.startDate) + ' ') + s.startClock + ' 마지막 식사 → ' +
+      (s.isViewToday ? '오늘 ' : M.fmtShort(s.endDate) + ' ') + s.endClock + '까지 (' + s.hours + '시간)';
+    setHtmlIfChanged($('t-fast-cap'), Views.esc(cap));
+    setHtmlIfChanged($('t-fast-value'), s.done
+      ? '<span class="big-num">' + s.hours + '시간 단식 달성!</span> 🏆'
+      : (s.beforeStart
+        ? '<span class="big-num">' + s.startClock + '</span> <em>부터 시작해요</em>'
+        : '<span class="big-num">' + Views.esc(s.leftText) + '</span> <em>남았어요</em>'));
+    setHtmlIfChanged($('t-fast-state'), Views.esc(s.done ? '달성' : (s.beforeStart ? '시작 전' : (s.minPassed ? s.minHours + '시간 통과' : '진행 중'))));
+    setHtmlIfChanged($('t-fast-elapsed'), '단식 ' + Views.esc(s.elapsedText) + ' 경과');
+    setHtmlIfChanged($('t-fast-pct'), s.pct + '%');
+    var minLine;
+    if (s.done) minLine = s.minHours + '시간 최소 기준 통과 ✓ · ' + s.hours + '시간 달성 🏆';
+    else if (s.beforeStart) minLine = s.minHours + '시간 최소 기준 · 시작 후 ' + s.minHours + '시간이면 통과예요';
+    else if (s.minPassed) minLine = s.minHours + '시간 최소 기준 통과 ✓ · ' + s.hours + '시간까지 ' + Views.esc(s.leftText) + ' 남았어요';
+    else minLine = s.minHours + '시간 최소 기준까지 ' + Views.esc(s.minLeftText) + ' 남았어요';
+    setHtmlIfChanged($('t-fast-min'), minLine);
+    setWidth('t-fast-bar', s.pct);
+    setRunner('t-fast-run', s.pct);
   }
 
   function paintSleep(s) {
@@ -617,13 +668,16 @@
 
   function tickTimers(now) {
     if (!state.participant || state.route !== 'today') return;
+    var nowD = now || new Date();
+    var day = viewDay();
     var prefs = M.timerPrefs(state.participant);
-    paintFasting(
-      M.fastingState(prefs.lastMeal, now, Program.check.fastingHours),
-      M.fastingState(prefs.lastMeal, now, Program.check.fast24Hours)
-    );
-    paintSleep(M.sleepState(prefs.wake, now, Program.check.sleepHours));
-    paintDinner(M.dinnerState(prefs.wake, now, M.dinnerMode(state.participant, viewDay())));
+    if (M.isFastDay(M.getPlan(state.participant, day))) {
+      paintFasting24(M.fast24State(state.participant, day, nowD, Program.check.fast24Hours));
+    } else {
+      paintFasting(M.fastingState(prefs.lastMeal, nowD, Program.check.fastingHours));
+    }
+    paintSleep(M.sleepState(prefs.wake, nowD, Program.check.sleepHours));
+    paintDinner(M.dinnerState(prefs.wake, nowD, M.dinnerMode(state.participant, day)));
   }
 
   async function saveWeeklyMetric(wk, metric, raw) {
@@ -657,6 +711,81 @@
 
   function planDraftFrom(p, day) {
     return Object.assign({}, M.getPlan(p, day));
+  }
+
+  /* ---------- 단식일 바꾸기 (같은 주차 안에서 옮기거나 해제) ---------- */
+  function firstFastDayOfWeek(p, week) {
+    var list = M.weekFastDays(p, week);
+    for (var i = 0; i < list.length; i++) if (list[i].fast) return list[i].day;
+    return null;
+  }
+
+  function fastMoveData(week, fromDay) {
+    var p = state.participant;
+    var cur = M.currentDay(p, today()) || 1;
+    var plan = M.fastPlanFor(week);
+    return {
+      week: week,
+      fromDay: fromDay,
+      days: M.weekFastDays(p, week).map(function (x) {
+        return {
+          day: x.day,
+          date: x.date,
+          fast: x.fast,
+          isToday: x.day === cur,
+          isFrom: !!fromDay && fromDay === x.day,
+          conflict: M.fastConflict(p, x.day, plan, fromDay ? [fromDay] : [])
+        };
+      })
+    };
+  }
+
+  function openFastMove(el) {
+    var p = state.participant;
+    if (!p) return;
+    var dayAttr = el && el.getAttribute ? el.getAttribute('data-day') : null;
+    var weekAttr = el && el.getAttribute ? el.getAttribute('data-week') : null;
+    var day = dayAttr ? Number(dayAttr) : viewDay();
+    var week = weekAttr ? Number(weekAttr) : Math.ceil(day / 7);
+    if (!week || week < 1) week = Math.ceil(viewDay() / 7);
+    if (week > 4) week = 4;
+    if (week < 2) {
+      toast('1주차는 14시간 공복만 하고 단식일이 없어요. 2주차부터 옮길 수 있어요.');
+      return;
+    }
+    var fromDay = null;
+    if (day && Math.ceil(day / 7) === week && M.isFastDay(M.getPlan(p, day))) fromDay = day;
+    if (!fromDay) fromDay = firstFastDayOfWeek(p, week);
+    openSheet({ type: 'fastMove', week: week, fromDay: fromDay });
+  }
+
+  async function applyFastMove(fromDay, toDay) {
+    var p = state.participant;
+    if (!p) return;
+    var ops = [];
+    if (fromDay && fromDay !== toDay) ops.push({ day: fromDay, meals: M.normalPlanForDay(fromDay) });
+    if (toDay) ops.push({ day: toDay, meals: M.fastPlanFor(Math.ceil(toDay / 7)) });
+    try {
+      var updated = null;
+      for (var i = 0; i < ops.length; i++) {
+        var op = ops[i];
+        var base = M.getPlan({ id: p.id, planOverrides: {} }, op.day);
+        var same = Program.meals.every(function (m) { return base[m] === op.meals[m]; });
+        updated = await store.setPlanOverride(p.id, op.day, same ? null : op.meals);
+      }
+      if (updated) applyParticipant(updated);
+      closeSheet();
+      state.day = toDay || fromDay;
+      go('today');
+      render();
+      if (toDay) {
+        toast('Day ' + fromDay + ' → Day ' + toDay + '로 단식일을 옮겼어요 · Day ' + toDay + '에 24시간 타이머가 떠요');
+      } else {
+        toast('Day ' + fromDay + ' 단식일을 해제했어요 · 14시간 공복 타이머로 바뀌었어요');
+      }
+    } catch (e) {
+      toast('저장하지 못했어요: ' + e.message, 'error');
+    }
   }
 
   /* ---------- 튜토리얼: 시작 인바디 저장 · 시작하기 ---------- */
@@ -1074,6 +1203,41 @@
       }
 
       case 'edit-plan': openPlanSheet(); break;
+      case 'open-fast-move': openFastMove(el); break;
+      case 'fast-move-to': {
+        var ms = state.sheet;
+        if (!ms || ms.type !== 'fastMove') return;
+        var toDay = Number(el.getAttribute('data-day'));
+        if (!toDay) return;
+        var srcDay = ms.fromDay;
+        var hit = M.fastConflict(state.participant, toDay, M.fastPlanFor(ms.week), srcDay ? [srcDay] : []);
+        if (hit.length) {
+          confirmAction('apply-fast-move', {
+            title: '연속 단식이에요',
+            message: 'Day ' + hit.join(', Day ') + '도 단식일이라 이틀 연속 단식이 됩니다. 프로그램은 연속 단식을 금지하고 있어요. 그래도 옮길까요?',
+            confirmLabel: '그래도 옮기기',
+            tone: 'warn',
+            onConfirm: function () { return applyFastMove(srcDay, toDay); }
+          });
+          return;
+        }
+        await applyFastMove(srcDay, toDay);
+        break;
+      }
+      case 'fast-clear': {
+        var cs = state.sheet;
+        if (!cs || cs.type !== 'fastMove') return;
+        var clearDay = Number(el.getAttribute('data-day')) || cs.fromDay;
+        if (!clearDay) return;
+        confirmAction('clear-fast', {
+          title: 'Day ' + clearDay + ' 단식일을 해제할까요?',
+          message: '이 날은 일반 식단으로 돌아가고 14시간 공복 타이머로 바뀌어요.',
+          confirmLabel: '해제',
+          tone: 'warn',
+          onConfirm: function () { return applyFastMove(clearDay, null); }
+        });
+        break;
+      }
       case 'plan-fast': {
         var s = state.sheet;
         if (!s || s.type !== 'plan') return;
@@ -1276,6 +1440,10 @@
     }
     if (field === 'lastMeal' || field === 'wake') {
       await saveTimerPref(field, el.value);
+      return;
+    }
+    if (field === 'fastPrevMeal') {
+      await saveFastPrevMeal(el.value);
       return;
     }
     if (field === 'memo') {

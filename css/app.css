@@ -278,6 +278,35 @@ h1, h2, h3, p { margin: 0; }
 .tc-meta { display: flex; justify-content: space-between; gap: 6px; font-size: 10.5px; color: var(--muted); margin-top: 6px; }
 .tc-note { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.45; }
 .tc-sub { font-size: 11px; color: #A8632F; background: #FDF3E7; border-radius: 8px; padding: 6px 8px; margin-top: 8px; line-height: 1.45; }
+.tc-src { font-size: 10.5px; color: var(--muted); margin-top: 5px; }
+/* 단식일 24시간 타이머 */
+.timer-card.fast24 { background: linear-gradient(165deg, #FFFFFF, #E9F8F0 60%, #FDF3E7 130%); border-color: #CBEBDC; }
+.timer-card.fast24 .tc-sub { background: #E7F6EE; color: #1B6B50; }
+.timer-card.fast24 .tc-cap { color: #1B6B50; }
+.fast-move-btn { margin-top: 10px; }
+.daynav-fast { display: flex; align-items: center; justify-content: center; gap: 8px; margin: -2px 0 10px; }
+.daynav-tag { font-size: 10.5px; font-weight: 800; color: #A8632F; background: #FDF0DF; border-radius: 7px; padding: 3px 7px; }
+.daynav-tag.off { color: #5E7A6D; background: #EFF4F1; }
+.daynav-fast .link-btn { font-size: 11.5px; }
+.wk-fast-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.wk-fast-line .link-btn { font-size: 12px; }
+/* 단식일 바꾸기 시트 */
+.fast-move-list { display: flex; flex-direction: column; gap: 7px; margin: 12px 0; }
+.fm-row {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px 8px;
+  width: 100%; text-align: left; background: #fff; border: 1px solid var(--line);
+  border-radius: 12px; padding: 10px 12px; font-family: inherit; cursor: pointer;
+}
+.fm-row:hover { background: var(--surface-2); }
+.fm-row.is-fast { border-color: #F0CFA8; background: #FFFBF4; }
+.fm-row.is-from { cursor: default; border-color: var(--brand); background: #F3FCF8; }
+.fm-row.is-today { box-shadow: inset 0 0 0 1px #D7EEE2; }
+.fm-day { font-size: 13px; font-weight: 800; color: var(--ink); }
+.fm-date { font-size: 11.5px; color: var(--muted); text-align: left; }
+.fm-state { font-size: 10.5px; font-weight: 800; color: #1B6B50; background: #E4F5EC; border-radius: 6px; padding: 3px 6px; }
+.fm-row.is-fast .fm-state { color: #A8632F; background: #FDF0DF; }
+.fm-warn { grid-column: 1 / -1; font-size: 10.5px; font-weight: 700; color: #C0503A; }
+.fm-today { font-style: normal; font-size: 9.5px; font-weight: 800; color: #fff; background: var(--brand); border-radius: 5px; padding: 1px 4px; margin-left: 3px; }
 .time-row {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   margin-top: 10px; padding-top: 9px; border-top: 1px dashed #E4EDE8;

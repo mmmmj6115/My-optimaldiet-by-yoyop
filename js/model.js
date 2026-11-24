@@ -134,13 +134,132 @@
     return out;
   }
 
-  function riskConsecutiveFast(participant, dayNumber, plan) {
-    var prev = dayNumber > 1 ? getPlan(participant, dayNumber - 1) : null;
-    var next = dayNumber < Program.totalDays ? getPlan(participant, dayNumber + 1) : null;
+  /* 단식일을 옮길 때: 앞뒤 날 중 '이미 단식일'인 날 (ignoreDays는 옮겨서 비워질 날) */
+  function fastConflict(participant, dayNumber, plan, ignoreDays) {
+    if (!isFastDay(plan)) return [];
+    var ignore = ignoreDays || [];
     var hits = [];
-    if (isFastDay(plan) && prev && isFastDay(prev)) hits.push(dayNumber - 1);
-    if (isFastDay(plan) && next && isFastDay(next)) hits.push(dayNumber + 1);
+    [dayNumber - 1, dayNumber + 1].forEach(function (n) {
+      if (n < 1 || n > Program.totalDays) return;
+      if (ignore.indexOf(n) >= 0) return;
+      if (isFastDay(getPlan(participant, n))) hits.push(n);
+    });
     return hits;
+  }
+
+  function riskConsecutiveFast(participant, dayNumber, plan) {
+    return fastConflict(participant, dayNumber, plan, []);
+  }
+
+  /* ---------------- 단식일 24시간 타이머 ---------------- */
+  var FAST_PREV_DEFAULT = '18:00';
+
+  function weekOf(dayNumber) { return Math.ceil((Number(dayNumber) || 1) / 7); }
+
+  /* 주차 안에서 단식일이 아닌 날의 기본 식단 (단식일이 기본값인 날은 그 주차 일반 패턴) */
+  function normalPlanForDay(dayNumber) {
+    var d = Number(dayNumber) || 1;
+    var base = (Program.days[d - 1] || {}).meals || {};
+    if (!isFastDay(base)) return Object.assign({}, base);
+    var w = weekOf(d);
+    var p = Program.patterns || {};
+    var key = w >= 4 ? 'W4' : (w >= 2 ? 'W2' : 'W1');
+    return Object.assign({}, p[key] || base);
+  }
+
+  /* 단식일 식단: 2·3주차는 저녁 무탄, 4주차는 저녁 저탄 */
+  function fastPlanFor(week) {
+    var w = Number(week) || 2;
+    var p = Program.patterns || {};
+    var key = w >= 4 ? 'FAST_LOW' : 'FAST_ZERO';
+    return Object.assign({}, p[key] || p.FAST_ZERO);
+  }
+
+  /* 그 주의 날짜별 단식일 여부 (단식일 바꾸기 시트용) */
+  function weekFastDays(participant, week) {
+    var w = Number(week) || 1;
+    var sd = (w - 1) * 7 + 1;
+    var ed = Math.min(w * 7, Program.totalDays);
+    var out = [];
+    for (var d = sd; d <= ed; d++) {
+      var plan = getPlan(participant, d);
+      out.push({
+        day: d, week: w, date: dayDate(participant.startDate, d),
+        fast: isFastDay(plan), plan: plan
+      });
+    }
+    return out;
+  }
+
+  /* 24시간 단식의 기준 시각: 이 날 직접 지정 → 전날 기록(entry.lastMealAt / 전날 타이머 시각)
+   * → 설정값(settings.fastingPrevMealAt) → 기본 18:00 */
+  function fastPrevMeal(participant, dayNumber) {
+    var p = participant || {};
+    var d = Number(dayNumber) || 1;
+    var s = p.settings || {};
+    var manual = s.fastPrevMeal && typeof s.fastPrevMeal === 'object' ? s.fastPrevMeal[String(d)] : null;
+    if (hmToMinutes(manual) !== null) return { hm: normHM(manual, FAST_PREV_DEFAULT), source: 'manual', sourceDay: null };
+    var prev = getEntry(p, d - 1);
+    if (prev && hmToMinutes(prev.lastMealAt) !== null) {
+      return { hm: normHM(prev.lastMealAt, FAST_PREV_DEFAULT), source: 'prev', sourceDay: d - 1 };
+    }
+    var linked = s.lastMeals && typeof s.lastMeals === 'object' ? s.lastMeals[String(d - 1)] : null;
+    if (hmToMinutes(linked) !== null) {
+      return { hm: normHM(linked, FAST_PREV_DEFAULT), source: 'prev', sourceDay: d - 1 };
+    }
+    if (hmToMinutes(s.fastingPrevMealAt) !== null) {
+      return { hm: normHM(s.fastingPrevMealAt, FAST_PREV_DEFAULT), source: 'settings', sourceDay: null };
+    }
+    return { hm: FAST_PREV_DEFAULT, source: 'default', sourceDay: null };
+  }
+
+  /* 단식일의 24시간 창: 전날 그 시각 시작 → 24시간 뒤 종료 (18시간 최소 기준 포함) */
+  function fast24State(participant, dayNumber, now, hours) {
+    var p = participant || {};
+    var d = Number(dayNumber) || 1;
+    var targetHours = Number(hours) || Program.check.fast24Hours || 24;
+    var targetMin = targetHours * 60;
+    var nowD = now ? new Date(now.getTime ? now.getTime() : now) : new Date();
+    var base = fastPrevMeal(p, d);
+    var mins = hmToMinutes(base.hm);
+    if (mins === null) mins = hmToMinutes(FAST_PREV_DEFAULT);
+    var dateStr = p.startDate ? dayDate(p.startDate, d) : fmtDate(nowD);
+    var start = parseDate(dateStr) || new Date(nowD.getTime());
+    start.setDate(start.getDate() - 1);
+    start.setHours(Math.floor(mins / 60), mins % 60, 0, 0);
+    var end = new Date(start.getTime() + targetMin * 60000);
+    var elapsedMin = Math.floor((nowD.getTime() - start.getTime()) / 60000);
+    var leftMin = targetMin - elapsedMin;
+    var minH = Number(Program.check.fastMinHours) || 18;
+    var minMin = minH * 60;
+    return {
+      day: d,
+      hours: targetHours,
+      minHours: minH,
+      prevMeal: base.hm,
+      source: base.source,
+      sourceDay: base.sourceDay,
+      start: start,
+      end: end,
+      startClock: clockOf(start),
+      endClock: clockOf(end),
+      startDate: fmtDate(start),
+      endDate: fmtDate(end),
+      isViewToday: fmtDate(nowD) === fmtDate(new Date(start.getTime() + DAY_MS)),
+      beforeStart: elapsedMin < 0,
+      elapsedMin: elapsedMin,
+      leftMin: leftMin,
+      elapsedText: minutesText(Math.max(elapsedMin, 0)),
+      leftText: minutesText(Math.max(leftMin, 0)),
+      overMin: leftMin < 0 ? -leftMin : 0,
+      overText: leftMin < 0 ? minutesText(-leftMin) : '',
+      done: leftMin <= 0,
+      pct: Math.max(0, Math.min(100, Math.round((elapsedMin / targetMin) * 100))),
+      minPassed: elapsedMin >= minMin,
+      minLeftMin: minMin - elapsedMin,
+      minLeftText: minutesText(Math.max(minMin - elapsedMin, 0)),
+      minPct: Math.max(0, Math.min(100, Math.round((elapsedMin / minMin) * 100)))
+    };
   }
 
   function round1(v) { return Math.round(v * 10) / 10; }
@@ -783,6 +902,13 @@
     isFastDay: isFastDay,
     fastingDays: fastingDays,
     isPostFastDay: isPostFastDay,
+    weekOf: weekOf,
+    normalPlanForDay: normalPlanForDay,
+    fastPlanFor: fastPlanFor,
+    weekFastDays: weekFastDays,
+    fastPrevMeal: fastPrevMeal,
+    fast24State: fast24State,
+    fastConflict: fastConflict,
     dayItems: dayItems,
     dayStatus: dayStatus,
     weeklyMetrics: weeklyMetrics,

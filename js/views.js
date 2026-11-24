@@ -71,7 +71,7 @@
     '<path d="M34.2 20.6q1.2 1.4 2.4 0" fill="none" stroke="#C4706A" stroke-width="1.2" stroke-linecap="round"/>';
 
   function runnerMark(pct, runId, small) {
-    var p = Math.max(3, Math.min(97, n(pct)));
+    var p = Math.max(3, Math.min(100, n(pct)));
     return '<span class="g-runner' + (small ? ' sm' : '') + '"' + (runId ? ' id="' + esc(runId) + '"' : '') +
       ' style="left:' + p + '%" aria-hidden="true">' +
       '<svg viewBox="6 0.5 42 52" xmlns="http://www.w3.org/2000/svg" focusable="false">' + RUNNER_BODY + '</svg></span>';
@@ -389,15 +389,13 @@
   function timerCardFasting(d) {
     var f = d.fasting;
     if (!f) return '';
+    /* 단식일이면 24시간 간헐적 단식 타이머로 바뀐다 (전날 마지막 식사 시각 기준) */
+    if (d.fast && d.fast24) return timerCardFast24(d);
     var cap = f.done ? '공복 ' + f.hours + '시간 달성' : '공복 ' + f.hours + '시간까지';
     var val = f.done
       ? '<span class="big-num">' + f.hours + '시간 공복 달성!</span> 🎉'
       : '<span class="big-num">' + esc(f.leftText) + '</span> <em>남았어요</em>';
-    var f24 = d.fasting24;
-    var line24 = (d.fast && f24)
-      ? '<p class="tc-sub" id="t-fast-24">24시간 단식 기준 ' + (f24.done ? '24시간 달성 · 물·허브티만 🎉' : esc(f24.leftText) + ' 남았어요') + '</p>'
-      : '';
-    return '<article class="timer-card fast">' +
+    return '<article class="timer-card fast" id="fast-card">' +
       '<div class="tc-head">' +
         '<span class="tc-label">' + icon('clock') + '공복 타이머</span>' +
         '<span class="tc-pill" id="t-fast-state">' + (f.done ? '달성' : '진행 중') + '</span>' +
@@ -407,8 +405,45 @@
       gaugeBlock(f.pct, { id: 't-fast-bar', runId: 't-fast-run' }) +
       '<div class="tc-meta"><span id="t-fast-elapsed">공복 ' + esc(f.elapsedText) + ' 경과</span><span id="t-fast-pct">' + f.pct + '%</span></div>' +
       '<p class="tc-note" id="t-fast-note">' + esc((f.startToday ? '오늘 ' : '어제 ') + f.startClock + ' 마지막 식사 · ' + f.hours + '시간 공복까지') + '</p>' +
-      line24 +
+      '<p class="tc-note" id="t-fast-hint">' + esc('단식일에는 이 카드가 24시간 단식 타이머로 바뀌어요.') + '</p>' +
       '<label class="time-row"><span>전날 마지막 식사</span><input type="time" data-field="lastMeal" value="' + esc(d.prefs.lastMeal) + '" aria-label="전날 마지막 식사 시각"></label>' +
+    '</article>';
+  }
+
+  /* 단식일 24시간 타이머: 전날 마지막 식사 시작 시각 → 24시간 뒤 */
+  function timerCardFast24(d) {
+    var s = d.fast24;
+    if (!s) return '';
+    var cap = (s.isViewToday ? '전날 ' : M.fmtShort(s.startDate) + ' ') + s.startClock + ' 마지막 식사 → ' +
+      (s.isViewToday ? '오늘 ' : M.fmtShort(s.endDate) + ' ') + s.endClock + '까지 (' + s.hours + '시간)';
+    var val;
+    if (s.done) val = '<span class="big-num">' + s.hours + '시간 단식 달성!</span> 🏆';
+    else if (s.beforeStart) val = '<span class="big-num">' + s.startClock + '</span> <em>부터 시작해요</em>';
+    else val = '<span class="big-num">' + esc(s.leftText) + '</span> <em>남았어요</em>';
+    var pill = s.done ? '달성' : (s.beforeStart ? '시작 전' : (s.minPassed ? s.minHours + '시간 통과' : '진행 중'));
+    var minLine;
+    if (s.done) minLine = s.minHours + '시간 최소 기준 통과 ✓ · ' + s.hours + '시간 달성 🏆';
+    else if (s.beforeStart) minLine = s.minHours + '시간 최소 기준 · 시작 후 ' + s.minHours + '시간이면 통과예요';
+    else if (s.minPassed) minLine = s.minHours + '시간 최소 기준 통과 ✓ · ' + s.hours + '시간까지 ' + esc(s.leftText) + ' 남았어요';
+    else minLine = s.minHours + '시간 최소 기준까지 ' + esc(s.minLeftText) + ' 남았어요';
+    var srcText = s.source === 'prev' ? '전날(Day ' + (s.day - 1) + ') 기록에서 가져왔어요'
+      : s.source === 'manual' ? '직접 고친 시각이에요'
+      : s.source === 'settings' ? '설정한 시각을 쓰고 있어요'
+      : '기본값 ' + s.prevMeal + ' · 전날 기록이 있으면 자동으로 맞춰져요';
+    return '<article class="timer-card fast fast24" id="fast-card">' +
+      '<div class="tc-head">' +
+        '<span class="tc-label">' + icon('clock') + '단식 타이머 · ' + s.hours + '시간</span>' +
+        '<span class="tc-pill" id="t-fast-state">' + esc(pill) + '</span>' +
+      '</div>' +
+      '<p class="tc-cap" id="t-fast-cap">' + esc(cap) + '</p>' +
+      '<p class="tc-big" id="t-fast-value">' + val + '</p>' +
+      gaugeBlock(s.pct, { id: 't-fast-bar', runId: 't-fast-run' }) +
+      '<div class="tc-meta"><span id="t-fast-elapsed">단식 ' + esc(s.elapsedText) + ' 경과</span><span id="t-fast-pct">' + s.pct + '%</span></div>' +
+      '<p class="tc-sub" id="t-fast-min">' + minLine + '</p>' +
+      '<p class="tc-note" id="t-fast-note">' + esc('2~4주차는 18~24시간 안에서 유연하게 봐요. 단식 중엔 물·허브티만, 영양제는 쉬어가요.') + '</p>' +
+      '<label class="time-row"><span>전날 마지막 식사</span><input type="time" data-field="fastPrevMeal" value="' + esc(s.prevMeal) + '" aria-label="전날 마지막 식사 시각"></label>' +
+      '<p class="tc-src" id="t-fast-src">' + esc(srcText) + '</p>' +
+      '<button class="btn ghost sm block fast-move-btn" data-act="open-fast-move" data-day="' + s.day + '">단식일 바꾸기</button>' +
     '</article>';
   }
 
@@ -605,11 +640,23 @@
       '</div>' +
       '<button class="icon-btn" data-act="next-day" aria-label="다음 날"' + (d.day >= 28 ? ' disabled' : '') + '>' + icon('chevron') + '</button>' +
       (!d.isToday ? '<button class="daynav-today" data-act="go-today">오늘로</button>' : '') +
-    '</div>';
+    '</div>' +
+    ((fast || d.week >= 2)
+      ? '<div class="daynav-fast">' + (fast ? '<span class="daynav-tag">단식일</span>' : '<span class="daynav-tag off">일반 식사일</span>') +
+        '<button class="link-btn" data-act="open-fast-move" data-day="' + d.day + '">단식일 바꾸기</button></div>'
+      : '');
 
-    var timers = d.isToday
-      ? '<div class="timer-grid">' + timerCardFasting(d) + timerCardDinner(d) + timerCardSleep(d) + '</div>'
-      : '<p class="note-line">공복·저녁식사·수면 타이머는 오늘 화면에서 실시간으로 보여요.</p>';
+    var timers;
+    if (fast && d.fast24) {
+      /* 단식일이면 오늘이 아니어도 24시간 타이머를 그 날짜 기준으로 보여준다 */
+      timers = '<div class="timer-grid">' + timerCardFasting(d) +
+        (d.isToday ? timerCardDinner(d) + timerCardSleep(d) : '') + '</div>' +
+        (d.isToday ? '' : '<p class="note-line">단식일 24시간 타이머를 ' + esc(M.fmtLong(d.date)) + ' 기준으로 보여드려요. 오늘 화면에서는 1초마다 갱신됩니다.</p>');
+    } else if (d.isToday) {
+      timers = '<div class="timer-grid">' + timerCardFasting(d) + timerCardDinner(d) + timerCardSleep(d) + '</div>';
+    } else {
+      timers = '<p class="note-line">공복·저녁식사·수면 타이머는 오늘 화면에서 실시간으로 보여요.</p>';
+    }
 
     var quote = quoteBanner(d.quote, d.day);
     var foods = foodBar(d);
@@ -660,7 +707,7 @@
         waterBlock(entry) +
         '<div class="subhead"><h2>생활 루틴</h2><span class="hint">자동 저장</span></div>' +
         '<div class="switch-list">' +
-          switchRow('fasting14', '공복시간 유지', Program.check.fastingHours + '시간 · 저녁은 취침 4시간 전', !!entry.fasting14) +
+          switchRow('fasting14', fast ? '단식 ' + Program.check.fastMinHours + '시간 이상' : '공복시간 유지', fast ? Program.check.fastMinHours + '~' + Program.check.fast24Hours + '시간 유연 기준 · 24시간이면 🏆' : Program.check.fastingHours + '시간 · 저녁은 취침 4시간 전', !!entry.fasting14) +
           switchRow('sleep', '수면', Program.check.sleepHours + '시간 이상 · 밤 12~4시 포함', !!entry.sleep) +
           '<div class="switch-row static">' +
             '<span class="switch-text"><b>운동</b><small>웨이트 20분+ · 유산소 40분+</small></span>' +
@@ -744,6 +791,17 @@
     return '<div class="wk-briefs">' + list.map(briefCard).join('') + '</div>';
   }
 
+  /* 보드 주차 블록의 단식일 안내 + 단식일 바꾸기 (실제 지정된 날짜 기준) */
+  function weekFastLine(list, week) {
+    var fasts = (list || []).filter(function (x) { return x.fast; }).map(function (x) { return x.day; });
+    if (!fasts.length) {
+      return week >= 2 ? '<p class="note-line wk-fast-line">이 주는 지금 단식일이 없어요. <button class="link-btn" data-act="open-fast-move" data-week="' + week + '">단식일 정하기</button></p>' : '';
+    }
+    var move = week >= 2 ? ' <button class="link-btn" data-act="open-fast-move" data-week="' + week + '">단식일 바꾸기</button>' : '';
+    return '<p class="note-line wk-fast-line">이 주의 단식일: ' + fasts.map(function (x) { return 'Day ' + x; }).join(', ') +
+      ' — 개인 일정에 맞게 옮길 수 있어요(연속 단식 금지).' + move + '</p>';
+  }
+
   function board(d) {
     var days = d.days;
     var cur = d.currentDay;
@@ -765,9 +823,11 @@
     if (String(d.week) === 'all') {
       Program.weeks.forEach(function (w) {
         var cells = days.filter(function (x) { return x.week === w.week; }).map(cell).join('');
+        var wkList = days.filter(function (x) { return x.week === w.week; });
         body += '<section class="week-block">' +
           '<div class="week-block-head"><span class="week-title">' + esc(w.title) + '</span><span class="week-sub">' + esc(w.subtitle) + '</span></div>' +
           weekBriefs(w.week) +
+          weekFastLine(wkList, w.week) +
           weekdaysRow() +
           '<div class="board-grid">' + cells + '</div>' +
         '</section>';
@@ -779,12 +839,10 @@
       body += '<section class="week-block">' +
         '<div class="week-block-head"><span class="week-title">' + esc(w.title) + '</span><span class="week-sub">' + esc(w.summary) + '</span></div>' +
         weekBriefs(wk) +
+        weekFastLine(list, wk) +
         '<div class="board-grid big">' + list.map(cell).join('') + '</div>' +
         '<div class="day-cards">' + list.map(dayCard).join('') + '</div>' +
       '</section>';
-      if (w.fastingDays && w.fastingDays.length) {
-        body += '<p class="note-line">이 주의 단식일: ' + w.fastingDays.map(function (x) { return 'Day ' + x; }).join(', ') + ' — 개인 일정에 맞게 옮길 수 있어요(연속 단식 금지).</p>';
-      }
     }
 
     var jump = '<div class="board-jump"><button class="btn ghost sm" data-act="go-today">오늘 기록하러 가기</button><button class="btn ghost sm" data-act="nav" data-route="tutorial">주차별 허용식품</button></div>';
@@ -1412,6 +1470,34 @@
     );
   }
 
+  function fastMoveSheet(d) {
+    var week = d.week;
+    var rows = (d.days || []).map(function (x) {
+      var stateText = x.isFrom ? '지금 단식일' : (x.fast ? '단식일' : '일반 식사');
+      var inner = '<span class="fm-day">Day ' + x.day + (x.isToday ? ' <em class="fm-today">오늘</em>' : '') + '</span>' +
+        '<span class="fm-date">' + esc(M.fmtLong(x.date)) + '</span>' +
+        '<span class="fm-state">' + esc(stateText) + '</span>' +
+        ((x.conflict && x.conflict.length) ? '<span class="fm-warn">연속 단식</span>' : '');
+      if (x.isFrom) {
+        return '<div class="fm-row is-fast is-from" aria-current="true">' + inner + '</div>';
+      }
+      return '<button class="fm-row' + (x.fast ? ' is-fast' : '') + (x.isToday ? ' is-today' : '') + '" data-act="fast-move-to" data-day="' + x.day + '" aria-label="Day ' + x.day + '로 단식일 옮기기">' + inner + '</button>';
+    }).join('');
+
+    var hasFast = (d.days || []).some(function (x) { return x.fast; });
+    var footer = (d.fromDay && hasFast)
+      ? '<button class="btn ghost block" data-act="fast-clear" data-day="' + d.fromDay + '">Day ' + d.fromDay + ' 단식일 해제 (일반 식단으로)</button>'
+      : '';
+
+    return sheetWrap(
+      sheetHead('단식일 바꾸기', week + '주차 · 하루를 골라요') +
+      '<p class="hint">옮기면 원래 날짜는 일반 식단으로 돌아가고, 새 날짜에 24시간 단식 타이머가 바로 떠요. 단식은 18~24시간 안에서 유연하게 봐요.</p>' +
+      '<div class="fast-move-list">' + rows + '</div>' +
+      footer +
+      '<p class="hint">연속 이틀 단식은 프로그램에서 권하지 않아요. 꼭 필요하면 한 번 더 확인해요.</p>'
+    );
+  }
+
   function promoSheet(d) {
     var p = d.promo || {};
     var typeOpts = Object.keys(Program.promos.types).map(function (k) {
@@ -1525,6 +1611,7 @@
     admin: admin,
     adminDetail: adminDetail,
     planSheet: planSheet,
+    fastMoveSheet: fastMoveSheet,
     promoSheet: promoSheet,
     addParticipantSheet: addParticipantSheet,
     profileSheet: profileSheet,
