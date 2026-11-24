@@ -767,9 +767,20 @@ h1, h2, h3, p { margin: 0; }
 .chart-grid { stroke: #E3EAE5; stroke-width: 1; }
 .chart-vgrid { stroke: #E9EEEA; stroke-width: 1; stroke-dasharray: 3 4; }
 .chart-tick { font-size: 8px; fill: #9AA6A0; }
-.chart-xlabel { font-size: 9px; fill: #6E7B75; }
-.chart-xdate { font-size: 7.5px; fill: #9AA6A0; }
-.chart-vlabel { font-size: 7.5px; font-weight: 700; fill: #4C5A54; }
+.chart-xlabel { font-size: 9.5px; fill: #5E6B65; font-weight: 600; }
+.chart-xdate { font-size: 8.5px; fill: #8C9993; }
+.chart-vlabel { font-size: 8px; font-weight: 700; fill: #3E4C46; paint-order: stroke; stroke: #F7FAF8; stroke-width: 1.6px; stroke-linejoin: round; }
+/* v14: 인바디 마인드 조언 카드 */
+.inbody-mind {
+  background: linear-gradient(135deg, #FFF8EC 0%, #F2FBF6 100%);
+  border: 1px solid #F0E3C8; border-radius: 14px;
+  padding: 12px 13px; margin-bottom: 12px; color: #6B5520;
+}
+.im-head { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
+.im-emoji { font-size: 14px; line-height: 1; }
+.im-head b { font-size: 12.5px; font-weight: 800; letter-spacing: -0.01em; color: #7A5A12; }
+.inbody-mind .im-lead { font-size: 12px; font-weight: 700; line-height: 1.55; color: #4A5A38; }
+.inbody-mind .im-sub { font-size: 11px; line-height: 1.55; margin-top: 4px; color: #8A8264; }
 .chart-empty { display: grid; place-items: center; gap: 6px; padding: 26px 10px; color: var(--muted); text-align: center; }
 .chart-empty .ic { width: 22px; height: 22px; color: #B7C4BD; }
 .chart-empty p { font-size: 12px; line-height: 1.5; }

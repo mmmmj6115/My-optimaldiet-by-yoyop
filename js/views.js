@@ -1046,7 +1046,8 @@
     return typeof v === 'number' && !isNaN(v) ? v.toFixed(dg) : '—';
   }
 
-  function seriesBlock(key, label, values, showX, unit, digits, dates) {
+  /* 모든 항목 그래프가 같은 x축(주차 라벨 + 날짜)을 그린다 — showX 조건 없이 항상 표시 */
+  function seriesBlock(key, label, values, unit, digits, dates) {
     var dg = digits === undefined ? 1 : digits;
     var u = unit || 'kg';
     var labels = ['시작', '1주', '2주', '3주', '4주'];
@@ -1067,7 +1068,7 @@
     min = Math.round((min - pad) * 10) / 10;
     max = Math.round((max + pad) * 10) / 10;
 
-    var W = 320, H = showX ? 104 : 80, pl = 30, pr = 14, pt = 14, pb = showX ? 28 : 12;
+    var W = 320, H = 104, pl = 30, pr = 14, pt = 14, pb = 30;
     var iw = W - pl - pr, ih = H - pt - pb;
     function x(i) { return pl + (iw * i) / 4; }
     function y(v) { return pt + ih - ((v - min) / (max - min)) * ih; }
@@ -1100,13 +1101,11 @@
       vlabels += '<text x="' + bx.toFixed(1) + '" y="' + ty.toFixed(1) + '" class="chart-vlabel" text-anchor="' + anchor + '">' + v.toFixed(dg) + '</text>';
     });
     var axis = '';
-    if (showX) {
-      labels.forEach(function (lb, i) {
-        axis += '<line x1="' + x(i).toFixed(1) + '" y1="' + pt + '" x2="' + x(i).toFixed(1) + '" y2="' + (pt + ih) + '" class="chart-vgrid"/>' +
-          '<text x="' + x(i).toFixed(1) + '" y="' + (H - 14) + '" class="chart-xlabel" text-anchor="middle">' + lb + '</text>' +
-          (dt[i] ? '<text x="' + x(i).toFixed(1) + '" y="' + (H - 4) + '" class="chart-xdate" text-anchor="middle">' + esc(dt[i]) + '</text>' : '');
-      });
-    }
+    labels.forEach(function (lb, i) {
+      axis += '<line x1="' + x(i).toFixed(1) + '" y1="' + pt + '" x2="' + x(i).toFixed(1) + '" y2="' + (pt + ih) + '" class="chart-vgrid"/>' +
+        '<text x="' + x(i).toFixed(1) + '" y="' + (H - 16) + '" class="chart-xlabel" text-anchor="middle">' + lb + '</text>' +
+        (dt[i] ? '<text x="' + x(i).toFixed(1) + '" y="' + (H - 5) + '" class="chart-xdate" text-anchor="middle">' + esc(dt[i]) + '</text>' : '');
+    });
     return '<div class="chart-series">' + head +
       '<svg viewBox="0 0 ' + W + ' ' + H + '" class="chart" role="img" aria-label="' + label + ' 주차별 추이">' +
       grid + axis + '<path d="' + path.trim() + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' + dots + vlabels +
@@ -1132,10 +1131,10 @@
       return '<div class="chart-box"><div class="chart-empty">' + icon('sparkle') + '<p>인바디를 2회 이상 기록하면<br>주차별 그래프가 그려져요.</p></div></div>';
     }
     return '<div class="chart-box">' +
-      seriesBlock('weight', '몸무게', pts.map(function (p) { return p.weight; }), false, 'kg', 1, xdates) +
-      seriesBlock('muscle', '골격근량', pts.map(function (p) { return p.muscle; }), false, 'kg', 1, xdates) +
-      seriesBlock('fat', '체지방량', pts.map(function (p) { return p.fat; }), true, 'kg', 1, xdates) +
-      seriesBlock('visceral', '내장지방레벨', pts.map(function (p) { return p.visceral; }), false, '레벨', 0, xdates) +
+      seriesBlock('weight', '몸무게', pts.map(function (p) { return p.weight; }), 'kg', 1, xdates) +
+      seriesBlock('muscle', '골격근량', pts.map(function (p) { return p.muscle; }), 'kg', 1, xdates) +
+      seriesBlock('fat', '체지방량', pts.map(function (p) { return p.fat; }), 'kg', 1, xdates) +
+      seriesBlock('visceral', '내장지방레벨', pts.map(function (p) { return p.visceral; }), '레벨', 0, xdates) +
       '</div>';
   }
 
@@ -1208,6 +1207,12 @@
     var p = d.participant;
     var changes = '<div class="change-grid">' + changeCard('몸무게', 'weight', wm) + changeCard('골격근량', 'muscle', wm) + changeCard('체지방량', 'fat', wm) + changeCard('내장지방레벨', 'visceral', wm, '레벨', 0) + '</div>';
     var notice = '<section class="notice-bar">' + icon('sparkle') + '<div><b>주 1회 인바디 체크</b><p>' + esc(wm.notice) + '</p></div></section>';
+    /* v14: 매일 체중 집착을 덜어 주는 인바디 마인드 조언 */
+    var mind = '<section class="inbody-mind" id="inbody-mind">' +
+      '<div class="im-head"><span class="im-emoji" aria-hidden="true">💡</span><b>매일 몸무게는 잠깐 쉬어가요</b></div>' +
+      '<p class="im-lead">매일 몸무게를 재지 않도록 노력해요! 일희일비는 다이어트의 적이에요.</p>' +
+      '<p class="im-sub">하루 숫자보다 주차별 체지방·근육량 흐름을 봐 주세요. 같은 조건에서 주 1회면 충분해요.</p>' +
+    '</section>';
 
     var rows = weekRow({
       wk: 0, label: '시작 · 1일차', value: wm.start, editable: true, targetDay: 1, targetDate: M.dayDate(p.startDate, 1),
@@ -1222,7 +1227,7 @@
       });
     });
 
-    return notice + changes +
+    return notice + mind + changes +
       '<section class="card"><div class="card-head"><h2>주차별 추이</h2><span class="hint">kg · 레벨</span></div>' + cycleInbodyNote(p, wm) + metricChart(wm) + '</section>' +
       '<section class="card"><div class="card-head"><h2>주차별 인바디 입력</h2><span class="hint">주 1회</span></div>' +
         '<p class="hint">값을 고치면 그 주에 기록된 날짜에 저장되고, 비어 있으면 이번 주는 오늘·지난 주는 주 마지막 날에 저장돼요.</p>' +
