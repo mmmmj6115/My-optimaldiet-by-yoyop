@@ -37,7 +37,14 @@
     return e;
   }
 
-  function participant(id, name, code, startDate, nickname) {
+  function participant(id, name, code, startDate, nickname, opts) {
+    opts = opts || {};
+    var settings = { lastMeal: '19:30', wake: '07:00' };
+    /* 지난 기록이 있는 가상 참여자는 튜토리얼을 이미 마친 상태 */
+    if (opts.tutorialDone) {
+      settings.tutorialDone = true;
+      settings.tutorialDoneAt = isoAt(startDate, '07:20');
+    }
     return {
       id: id,
       name: name,
@@ -45,7 +52,7 @@
       code: code,
       startDate: startDate,
       createdAt: isoAt(startDate, '07:30'),
-      settings: { lastMeal: '19:30', wake: '07:00' },
+      settings: settings,
       planOverrides: {},
       entries: {},
       feedback: []
@@ -69,7 +76,7 @@
     });
 
     /* 2) 김서연 — 오늘 Day 16, 꾸준히 기록 중 */
-    var p2 = participant('p2', '김서연', '2751', M.addDays(t, -15), '서연');
+    var p2 = participant('p2', '김서연', '2751', M.addDays(t, -15), '서연', { tutorialDone: true });
     var w2 = 61.2, m2 = 21.4, f2 = 24.1, v2 = 8;
     for (var d = 1; d <= 16; d++) {
       w2 = M.round1(w2 - 0.18);
@@ -92,11 +99,11 @@
     }
 
     /* 3) 이지은 — 어제 시작, 오늘 Day 2 */
-    var p3 = participant('p3', '이지은', '4813', M.addDays(t, -1), '지은');
+    var p3 = participant('p3', '이지은', '4813', M.addDays(t, -1), '지은', { tutorialDone: true });
     p3.entries['1'] = mkEntry(p3, 1, { weight: 57.8, muscle: 20.6, fat: 23.4, visceral: 6, water: 6, f14: true, sleep: false, cd: true, bowel: true, se: false, memo: '시작! 내일은 물 더 챙기기.' });
 
     /* 4) 최하늘 — Day 9인데 기록이 뜸함 */
-    var p4 = participant('p4', '최하늘', '6302', M.addDays(t, -8), '하늘');
+    var p4 = participant('p4', '최하늘', '6302', M.addDays(t, -8), '하늘', { tutorialDone: true });
     p4.entries['1'] = mkEntry(p4, 1, { weight: 72.0, muscle: 24.0, fat: 30.2, visceral: 11, water: 4, sleep: false, wt: false, cd: false, bowel: false, miss: ['lunch', 'snack'], memo: '시작해봅니다.' });
     p4.entries['2'] = mkEntry(p4, 2, { weight: 71.8, muscle: 24.0, fat: 30.0, visceral: 11, water: 5, f14: false, sleep: false, wt: true, bowel: true, miss: ['dinner'] });
     p4.entries['5'] = mkEntry(p4, 5, { weight: 71.6, muscle: 23.9, fat: 29.8, visceral: 10, water: 3, sleep: false, cd: true, bowel: false, se: false, miss: ['breakfast'] });

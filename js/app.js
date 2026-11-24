@@ -31,9 +31,7 @@
     route: 'today',
     day: null,
     boardWeek: 'all',
-    boardTab: 'check',
     foldOpen: false,
-    guideWeek: 1,
     promoType: 'all',
     promoCat: 'all',
     adminTab: 'participants',
@@ -91,10 +89,10 @@
     var wantsAdmin = h === 'admin' || h === 'admin/promos' || h.indexOf('admin/') === 0;
     /* 관리자 코드로 들어온 세션이 아니면 주소로도 관리자 화면을 열 수 없다 */
     if (wantsAdmin && !isAdminSession()) { state.route = 'today'; state.adminId = null; return; }
-    if (h === 'board') { state.route = 'board'; state.boardTab = 'check'; return; }
-    if (h === 'body') { state.route = 'board'; state.boardTab = 'inbody'; return; }
+    if (h === 'tutorial' || h === 'guide') { state.route = 'tutorial'; return; }
+    if (h === 'board') { state.route = 'board'; return; }
+    if (h === 'body') { state.route = 'body'; return; }
     if (h === 'promos') { state.route = 'promos'; return; }
-    if (h === 'guide') { state.route = 'guide'; return; }
     if (h === 'admin/promos') { state.route = 'admin'; state.adminTab = 'promos'; return; }
     if (h.indexOf('admin/') === 0) { state.route = 'adminDetail'; state.adminId = h.slice(6); return; }
     if (h === 'admin') { state.route = 'admin'; state.adminTab = 'participants'; return; }
@@ -128,6 +126,8 @@
     }
     await reloadAll();
     parseRoute();
+    /* 처음 접속(튜토리얼 미완료)이면 튜토리얼 탭이 먼저 열린다 */
+    if (state.participant && !M.tutorialDone(state.participant) && state.route === 'today') state.route = 'tutorial';
     render();
     global.document.addEventListener('click', onClick);
     global.document.addEventListener('change', onChange);
@@ -208,12 +208,14 @@
 
     var html = '';
     try {
-      if (state.route === 'board') {
+      if (state.route === 'tutorial') {
+        html = Views.tutorial(tutorialData());
+      } else if (state.route === 'board') {
         html = Views.board(boardData());
+      } else if (state.route === 'body') {
+        html = Views.body(boardData());
       } else if (state.route === 'promos') {
         html = Views.promos(promosData());
-      } else if (state.route === 'guide') {
-        html = Views.guide(guideData());
       } else if (state.route === 'admin') {
         html = Views.admin(adminData());
       } else if (state.route === 'adminDetail') {
@@ -231,7 +233,7 @@
     view.innerHTML = html;
     nav.innerHTML = Views.tabbar({ route: state.route, role: state.session ? state.session.role : 'participant' });
 
-    var key = state.route + '|' + state.adminTab + '|' + state.adminId + '|' + state.boardTab + '|' + state.guideWeek + '|' + state.promoType + '|' + state.promoCat;
+    var key = state.route + '|' + state.adminTab + '|' + state.adminId + '|' + state.promoType + '|' + state.promoCat;
     if (state.lastKey && key !== state.lastKey) {
       try { global.scrollTo(0, 0); } catch (e) { /* 무시 */ }
     }
@@ -303,17 +305,36 @@
       participant: p,
       days: M.boardDays(p, today()),
       week: state.boardWeek,
-      tab: state.boardTab,
       currentDay: M.currentDay(p, today()),
       overall: M.overallRate(p, today()),
       weekly: M.weeklyMetrics(p, today())
     };
   }
 
-  function guideData() {
+  /* 튜토리얼: 시작 인바디(Day 1) 값과 단백질 권장량 계산용 체중 */
+  function tutorialData() {
     var p = state.participant;
-    var lv = p ? M.latestValues(p, Program.totalDays, ['weight']).weight : null;
-    return { week: state.guideWeek, weight: lv ? lv.value : null };
+    var d1 = M.getEntry(p, 1) || {};
+    var latest = M.latestValues(p, Program.totalDays, ['weight', 'muscle', 'fat', 'visceral']);
+    function pick(key) {
+      if (typeof d1[key] === 'number') return d1[key];
+      var lv = latest[key];
+      return lv && typeof lv.value === 'number' ? lv.value : '';
+    }
+    var weight = pick('weight');
+    return {
+      participant: p,
+      nickname: p.nickname || '',
+      done: M.tutorialDone(p),
+      currentDay: M.currentDay(p, today()),
+      start: {
+        weight: weight,
+        muscle: pick('muscle'),
+        fat: pick('fat'),
+        visceral: pick('visceral')
+      },
+      weight: typeof weight === 'number' && weight > 0 ? weight : null
+    };
   }
 
   function promosData() {
@@ -638,6 +659,85 @@
     return Object.assign({}, M.getPlan(p, day));
   }
 
+  /* ---------- 튜토리얼: 시작 인바디 저장 · 시작하기 ---------- */
+  function readTutorialForm(form) {
+    if (!form || !form.elements || !form.elements.namedItem) return null;
+    function val(name) {
+      var el = form.elements.namedItem(name);
+      return el && el.value !== undefined && el.value !== null ? String(el.value).trim() : '';
+    }
+    return { nickname: val('nickname'), weight: val('weight'), muscle: val('muscle'), fat: val('fat'), visceral: val('visceral') };
+  }
+
+  function parseTutorial(raw) {
+    if (!raw) return { ok: true, data: {} };
+    var data = { metrics: {} };
+    var err = '';
+    if (raw.nickname !== undefined) data.nickname = raw.nickname.slice(0, 12);
+    [['weight', '시작 체중'], ['muscle', '골격근량'], ['fat', '체지방량']].forEach(function (pair) {
+      var k = pair[0], label = pair[1];
+      var v = raw[k];
+      if (v === '' || v === undefined) return;
+      var num = Number(v);
+      if (!isFinite(num) || num <= 0 || num > 400) { if (!err) err = label + '은 0~400 사이 숫자로 넣어주세요'; return; }
+      data.metrics[k] = M.round1(num);
+    });
+    var vis = raw.visceral;
+    if (vis !== '' && vis !== undefined) {
+      var vnum = Number(vis);
+      if (!isFinite(vnum) || vnum < 1 || vnum > 20) { if (!err) err = '내장지방 레벨은 1~20 사이 숫자로 넣어주세요'; }
+      else data.metrics.visceral = Math.round(vnum);
+    }
+    if (err) return { ok: false, error: err };
+    return { ok: true, data: data };
+  }
+
+  async function saveTutorial(form, complete) {
+    var p = state.participant;
+    if (!p) return false;
+    var parsed = parseTutorial(readTutorialForm(form));
+    if (!parsed.ok) { toast(parsed.error, 'error'); return false; }
+    var data = parsed.data;
+    try {
+      var updated = null;
+      var patch = {};
+      if (data.nickname !== undefined && data.nickname !== p.nickname) patch.nickname = data.nickname;
+      if (Object.keys(patch).length) updated = await store.updateParticipant(p.id, patch);
+      var metrics = data.metrics || {};
+      if (Object.keys(metrics).length) {
+        var base = M.getEntry(updated || p, 1) || {};
+        var next = JSON.parse(JSON.stringify(base));
+        if (!next.date) next.date = M.dayDate(p.startDate, 1);
+        if (!next.meals) next.meals = {};
+        Object.keys(metrics).forEach(function (k) { next[k] = metrics[k]; });
+        next.updatedAt = new Date().toISOString();
+        updated = await store.putEntry(p.id, 1, next);
+      }
+      if (complete) {
+        var cur = updated || state.participant;
+        var settings = Object.assign({}, (cur && cur.settings) || {}, {
+          tutorialDone: true,
+          tutorialDoneAt: new Date().toISOString()
+        });
+        updated = await store.updateParticipant(p.id, { settings: settings });
+      }
+      if (updated) applyParticipant(updated);
+      if (!complete) {
+        render();
+        toast('시작 인바디와 닉네임을 저장했어요 · 오늘 화면에 바로 반영돼요');
+        return true;
+      }
+      state.day = M.currentDay(state.participant, today()) || 1;
+      go('today');
+      render();
+      toast('입력 저장 완료! 1일차를 시작해요 🎉');
+      return true;
+    } catch (e) {
+      toast('저장하지 못했어요: ' + e.message, 'error');
+      return false;
+    }
+  }
+
   function openPlanSheet() {
     var p = state.participant;
     var day = viewDay();
@@ -723,7 +823,8 @@
     state.day = null;
     closeSheet();
     await reloadAll();
-    go('today');
+    /* [학습] 튜토리얼을 끝내지 않았거나 새로 시작한 참여자는 튜토리얼 탭부터 */
+    go(participant && !M.tutorialDone(participant) ? 'tutorial' : 'today');
     render();
     if (message) toast(message);
   }
@@ -826,6 +927,7 @@
       }
       case 'open-profile': openSheet({ type: 'profile' }); break;
       case 'signout': await signOut(); break;
+      case 'tutorial-start': await saveTutorial(global.document.getElementById('tutorial-form'), true); break;
 
       case 'prev-day':
         state.day = Math.max(1, viewDay() - 1);
@@ -1012,26 +1114,13 @@
         break;
       }
 
-      case 'board-tab':
-        state.boardTab = el.getAttribute('data-tab') === 'inbody' ? 'inbody' : 'check';
-        go(state.boardTab === 'inbody' ? 'body' : 'board');
-        break;
       case 'board-week':
         state.boardWeek = el.getAttribute('data-value');
-        state.boardTab = 'check';
         render();
         break;
       case 'open-day':
         state.day = Number(el.getAttribute('data-day'));
         go('today');
-        break;
-      case 'guide-week':
-        state.guideWeek = Number(el.getAttribute('data-value')) || 1;
-        render();
-        break;
-      case 'guide-week-here':
-        state.guideWeek = Number(el.getAttribute('data-week')) || 1;
-        go('guide');
         break;
       case 'promo-type':
         state.promoType = el.getAttribute('data-value');
@@ -1242,6 +1331,11 @@
         render();
         toast(created.name + ' 참여자를 추가했어요 · 코드 ' + created.code);
       } catch (err) { toast(err.message, 'error'); }
+      return;
+    }
+
+    if (form.id === 'tutorial-form') {
+      await saveTutorial(form, false);
       return;
     }
 

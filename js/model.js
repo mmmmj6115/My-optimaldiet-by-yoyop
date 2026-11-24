@@ -98,6 +98,11 @@
     return n > Program.totalDays ? Program.totalDays : n;
   }
 
+  /* 튜토리얼을 끝냈는지 — 끝내기 전엔 튜토리얼 탭이 먼저 열린다 */
+  function tutorialDone(participant) {
+    return !!(participant && participant.settings && participant.settings.tutorialDone);
+  }
+
   function isFinished(participant, today) {
     return dayNumberFor(participant.startDate, today || todayStr()) > Program.totalDays;
   }
@@ -771,6 +776,7 @@
     dayDate: dayDate,
     dayNumberFor: dayNumberFor,
     currentDay: currentDay,
+    tutorialDone: tutorialDone,
     isFinished: isFinished,
     getEntry: getEntry,
     getPlan: getPlan,

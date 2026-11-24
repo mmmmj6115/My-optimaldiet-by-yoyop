@@ -814,6 +814,77 @@ h1, h2, h3, p { margin: 0; }
 .tip-box p { font-size: 12px; line-height: 1.55; margin-top: 2px; }
 .danger .card-head h2 { color: var(--coral); }
 
+/* ---------- 보드 주차별 정보 ---------- */
+.wk-badge {
+  display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 6px;
+  background: var(--brand); color: #fff; font-size: 10px; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap;
+}
+.wk-briefs { display: grid; gap: 8px; margin-bottom: 11px; }
+.wk-brief { background: var(--surface-2); border: 1px solid var(--line); border-radius: 13px; padding: 10px 11px; }
+.wk-brief-head { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; }
+.wk-brief-head b { font-size: 12.5px; font-weight: 800; letter-spacing: -0.01em; }
+.wk-brief-head em { margin-left: auto; font-style: normal; font-size: 15px; line-height: 1; }
+.wk-brief-rows { margin: 0; display: grid; gap: 4px; }
+.wk-brief-rows > div { display: grid; grid-template-columns: 34px 1fr; gap: 6px; align-items: start; }
+.wk-brief-rows dt { font-size: 10px; font-weight: 800; color: var(--brand); background: var(--brand-soft); border-radius: 5px; padding: 2px 0; text-align: center; }
+.wk-brief-rows dd { margin: 0; font-size: 11.5px; color: var(--ink-2); line-height: 1.45; }
+
+/* ---------- 튜토리얼 ---------- */
+.tut-intro {
+  background: linear-gradient(150deg, #1F7A5C, #2FA37C);
+  color: #fff; border-radius: var(--radius); padding: 16px; margin-bottom: 12px;
+  box-shadow: 0 12px 26px rgba(31, 122, 92, .22);
+}
+.tut-intro-top { display: flex; gap: 11px; align-items: flex-start; }
+.tut-mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: rgba(255,255,255,.18); flex: 0 0 auto; }
+.tut-mark .ic { width: 21px; height: 21px; color: #fff; }
+.tut-intro-top b { font-size: 17px; font-weight: 800; letter-spacing: -0.02em; }
+.tut-intro-top .hint { color: #D8F0E5; font-size: 12px; margin-top: 3px; line-height: 1.5; }
+.tut-steps { list-style: none; margin: 13px 0 0; padding: 0; display: grid; gap: 7px; }
+.tut-step { display: flex; gap: 9px; align-items: flex-start; background: rgba(255,255,255,.14); border-radius: 11px; padding: 8px 10px; }
+.tut-num { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 7px; background: #fff; color: var(--brand); font-size: 11px; font-weight: 800; flex: 0 0 auto; }
+.tut-step b { display: block; font-size: 12.5px; }
+.tut-step small { font-size: 11px; color: #D8F0E5; }
+.tut-card .card-head { align-items: center; flex-wrap: wrap; gap: 6px; }
+.tut-card .card-head h2 { flex: 1 1 auto; }
+.tut-card .card-head .hint { flex: 0 0 100%; }
+.week-chip.is-done { color: #fff; background: var(--brand); }
+.tut-profile { display: flex; gap: 11px; align-items: center; margin-bottom: 13px; }
+.tut-profile b { font-size: 14px; font-weight: 800; }
+.tut-profile .hint { margin-top: 2px; }
+.tut-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.tut-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.tut-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tut-field > span:first-child { font-size: 11px; font-weight: 700; color: var(--muted); }
+.tut-input { display: flex; align-items: center; gap: 5px; border: 1px solid var(--line); border-radius: 11px; background: #fff; padding: 0 10px; min-width: 0; overflow: hidden; }
+.tut-input input { flex: 1 1 0%; width: 100%; min-width: 0; border: 0; background: none; padding: 10px 0; font-size: 15px; font-weight: 700; color: var(--ink); letter-spacing: -0.01em; }
+.tut-input input::-webkit-outer-spin-button,
+.tut-input input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.tut-input em { font-style: normal; font-size: 10.5px; font-weight: 700; color: var(--muted); }
+.tut-rules { display: grid; gap: 8px; }
+.tut-rule { display: flex; gap: 10px; align-items: flex-start; background: var(--brand-soft); border-radius: 12px; padding: 10px 11px; }
+.tut-rule-ic { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; background: #fff; font-size: 15px; line-height: 1; flex: 0 0 auto; }
+.tut-rule b { font-size: 12.5px; font-weight: 800; color: #1B6B50; }
+.tut-rule p { font-size: 12px; color: var(--ink-2); line-height: 1.5; margin-top: 2px; }
+.tut-more { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 9px; }
+.tut-more summary { font-size: 11.5px; font-weight: 700; color: var(--brand); cursor: pointer; }
+.tut-more summary::-webkit-details-marker { display: none; }
+.tut-more summary::after { content: ' +'; }
+.tut-more[open] summary::after { content: ' –'; }
+.tut-more .rule-list, .tut-more .forbid-list { margin-top: 9px; }
+.tut-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tut-period { border-top: 1px dashed var(--line); padding-top: 11px; margin-top: 11px; }
+.tut-period:first-of-type { border-top: 0; padding-top: 0; margin-top: 0; }
+.tut-period-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.tut-period-head b { font-size: 12.5px; font-weight: 800; }
+.tut-period-head small { font-size: 10.5px; color: var(--muted); }
+.tut-cta {
+  background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 13px 14px 10px; margin: 4px 0 12px;
+}
+.tut-cta .btn { min-height: 50px; font-size: 15px; font-weight: 800; }
+.tut-cta .hint { margin-top: 7px; }
+
 /* ---------- 관리자 ---------- */
 .admin-head {
   background: linear-gradient(150deg, #24352C, #16211C);
