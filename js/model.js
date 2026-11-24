@@ -814,6 +814,21 @@
     { key: 'sleep', label: '수면', icon: 'bed' }
   ];
 
+  /* 퀘스트(투두) 시간대 기본값 · 사용자가 설정에서 바꿀 수 있다 */
+  var QUEST_TIME_DEFAULT = {
+    breakfast: '08:00', lunch: '11:00', snack: '15:00', dinner: '19:00', exercise: '21:00', sleep: '23:00'
+  };
+
+  function questTimes(participant) {
+    var s = (participant && participant.settings) || {};
+    var saved = s.questTimes && typeof s.questTimes === 'object' ? s.questTimes : {};
+    var out = {};
+    Object.keys(QUEST_TIME_DEFAULT).forEach(function (k) {
+      out[k] = hmToMinutes(saved[k]) !== null ? normHM(saved[k], '') : QUEST_TIME_DEFAULT[k];
+    });
+    return out;
+  }
+
   function quests(plan, entry, day) {
     var e = entry || {};
     var d = Number(day);
@@ -1005,6 +1020,7 @@
     diffDays: diffDays,
     fmtLong: fmtLong,
     fmtShort: fmtShort,
+    fmtDate: fmtDate,
     dayDate: dayDate,
     dayNumberFor: dayNumberFor,
     currentDay: currentDay,
@@ -1056,6 +1072,8 @@
     dinnerDefaultMode: dinnerDefaultMode,
     dinnerModes: DINNER_MODES,
     quests: quests,
+    questTimes: questTimes,
+    questTimeDefault: QUEST_TIME_DEFAULT,
     quoteFor: quoteFor,
     photoKeys: PHOTO_KEYS,
     photoLabel: PHOTO_LABEL,

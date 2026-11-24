@@ -592,30 +592,31 @@
     return null;
   }
 
-  function foodBar(d) {
-    var w = Program.weeks[d.week - 1] || {};
-    var detox = isDetoxDay(d.day);
-    var period = detox ? null : periodFor(d.day);
-    var allow = detox ? Program.detox.chips : (period && period.chips ? period.chips : (w.foodChips || []).slice(0, 8));
-    var avoid = detox
-      ? Program.detox.forbiddenChips
-      : (period && period.forbiddenChips
-        ? period.forbiddenChips
-        : Program.forbidden.map(function (g) { return { e: g.emoji, t: g.chip }; }));
+  /* 보드 블록 안의 허용 · 금기식품 (이모지 + 글씨 칩) */
+  function blockFood(week) {
+    var w = Program.weeks[week - 1] || {};
+    var period = week === 1 ? null : (Program.periods || [])[week];
+    var allow = (period && period.chips && period.chips.length) ? period.chips : (w.foodChips || []);
+    var avoid = (period && period.forbiddenChips && period.forbiddenChips.length)
+      ? period.forbiddenChips
+      : Program.forbidden.map(function (g) { return { e: g.emoji, t: g.chip }; });
+    return { allow: allow, avoid: avoid };
+  }
+
+  function foodChipsBlock(food) {
+    var allow = (food && food.allow) || [];
+    var avoid = (food && food.avoid) || [];
     if (!allow.length && !avoid.length) return '';
-    return '<section class="food-bar' + (detox ? ' detox' : '') + '">' +
-      '<div class="food-grid">' +
-        '<div class="food-side allow">' +
-          '<div class="fb-head">' + icon('leaf') + '<b>허용식품</b><em>' + esc(detox ? 'D1~3 당질 제한' : (period ? period.badge : (w.title || ''))) + '</em></div>' +
-          '<div class="fb-chips">' + allow.map(function (c) { return foodChipHTML(c.e, c.t, 'ok'); }).join('') + '</div>' +
-        '</div>' +
-        '<div class="food-side avoid">' +
-          '<div class="fb-head">' + icon('ban') + '<b>금기식품</b><em>' + esc(detox ? 'D1~3 기준' : (period && period.forbiddenChips ? period.badge + ' 기준' : '전 주차')) + '</em></div>' +
-          '<div class="fb-chips">' + avoid.map(function (g) { return foodChipHTML(g.e, g.t, 'no'); }).join('') + '</div>' +
-        '</div>' +
+    return '<div class="food-block">' +
+      '<div class="food-side allow">' +
+        '<div class="fb-head">' + icon('leaf') + '<b>허용식품</b></div>' +
+        '<div class="fb-chips">' + allow.map(function (c) { return foodChipHTML(c.e, c.t, 'ok'); }).join('') + '</div>' +
       '</div>' +
-      '<button class="food-more" data-act="nav" data-route="tutorial">튜토리얼에서 허용식품 · 금기식 전체 보기 →</button>' +
-    '</section>';
+      '<div class="food-side avoid">' +
+        '<div class="fb-head">' + icon('ban') + '<b>금기식품</b></div>' +
+        '<div class="fb-chips">' + avoid.map(function (c) { return foodChipHTML(c.e, c.t, 'no'); }).join('') + '</div>' +
+      '</div>' +
+    '</div>';
   }
 
   function timeOnly(iso) {
@@ -650,42 +651,92 @@
     var q = d.quests;
     if (!q) return '';
     var entry = d.entry || {};
-    var cards = q.list.map(function (it, i) {
+    var times = d.questTimes || M.questTimeDefault;
+    var rows = q.list.map(function (it) {
       var st = QUEST_STYLE[it.key] || { e: '✨', t: 'etc' };
-      var cls = 'quest-card t-' + st.t + (it.done ? ' done' : '') + (it.na ? ' is-na' : '');
-      var inner = '<span class="q-top">' +
-          '<span class="q-num">' + (i + 1) + '</span>' +
-          '<span class="q-ic" aria-hidden="true">' + st.e + '</span>' +
-          '<b class="q-title">' + esc(it.label) + '</b>' +
-          '<span class="q-check" aria-hidden="true">' + (it.done ? icon('check') : '') + '</span>' +
-        '</span>' +
-        '<span class="q-sub">' + esc(it.sub) + '</span>';
-      var main;
-      if (it.na) {
-        main = '<div class="quest-main" aria-label="' + esc(it.label + ' ' + it.sub) + '">' + inner + '</div>';
-      } else {
-        main = '<button class="quest-main" data-act="toggle-quest" data-quest="' + esc(it.key) + '" aria-pressed="' + it.done + '" aria-label="' + esc(it.label + ' ' + (it.done ? '완료 취소' : '완료 처리')) + '">' + inner + '</button>';
-      }
+      var cls = 'todo-row t-' + st.t + (it.done ? ' done' : '') + (it.na ? ' is-na' : '');
+      var when = it.key === 'water'
+        ? '<span class="todo-when">매일</span>'
+        : '<input class="todo-time" type="time" data-field="questTime" data-quest="' + esc(it.key) + '" value="' + esc(times[it.key] || '') + '" aria-label="' + esc(it.label + ' 시간대') + '">';
+      var body = '<span class="todo-dot" aria-hidden="true">' + (it.done ? icon('check') : '') + '</span>' +
+        '<span class="todo-text"><b>' + st.e + ' ' + esc(it.label) + '</b><small>' + esc(it.sub) + '</small></span>';
+      var main = it.na
+        ? '<div class="todo-main" aria-label="' + esc(it.label + ' ' + it.sub) + '">' + body + '</div>'
+        : '<button class="todo-main" data-act="toggle-quest" data-quest="' + esc(it.key) + '" aria-pressed="' + it.done + '" aria-label="' + esc(it.label + ' ' + (it.done ? '완료 취소' : '완료 처리')) + '">' + body + '</button>';
       var extra = '';
       if (it.key === 'water') {
-        extra = '<div class="q-extra"><span>' + it.cups + '/' + it.target + '잔</span>' +
-          '<button class="q-mini" data-act="water-inc"' + (it.cups >= it.target ? ' disabled' : '') + ' aria-label="물 한 잔 추가">+1잔</button></div>';
+        extra = '<button class="todo-add" data-act="water-inc"' + (it.cups >= it.target ? ' disabled' : '') + ' aria-label="물 한 잔 추가">+1잔 <span>' + it.cups + '/' + it.target + '</span></button>';
       }
-      if (M.photoKeys.indexOf(it.key) >= 0 && !it.na) {
-        extra += photoControl(it.key, entry, it.key === 'exercise' ? '운동 인증' : '인증사진');
-      }
-      return '<div class="' + cls + '">' + main + extra + '</div>';
+      return '<div class="' + cls + '">' + main + extra + when + '</div>';
     }).join('');
 
     return '<section class="quest-wrap">' +
       '<div class="quest-head">' +
-        '<div><h2>오늘의 퀘스트</h2><p class="hint">눌러서 완료!</p></div>' +
+        '<div><h2>오늘의 퀘스트</h2><p class="hint">눌러서 완료 · 시간은 직접 바꿀 수 있어요</p></div>' +
         '<span class="quest-count">퀘스트 <b>' + q.done + '</b>/' + q.total + ' 완료</span>' +
       '</div>' +
       gaugeBlock(q.pct, { id: 'q-bar', cls: 'qbar', wrap: 'quest-gauge', small: true }) +
-      '<div class="quest-grid">' + cards + '</div>' +
-      '<p class="quest-foot">운동은 웨이트 20분+ 또는 유산소 40분+면 완료예요. 퀘스트는 28일 체크보드 · 관리자 기록과 바로 연결되고, 영양제 · 공복 · 생리 · 대변은 아래 세부 기록에서 체크해요.</p>' +
+      '<div class="todo-list">' + rows + '</div>' +
+      '<p class="quest-foot">운동은 웨이트 20분+ 또는 유산소 40분+면 완료예요. 아침·저녁을 체크하면 공복·저녁 타이머 기록도 함께 남고, 인증사진을 올리면 촬영 시각에 맞춰 해당 항목이 자동 체크돼요.</p>' +
     '</section>';
+  }
+
+  /* 세부 기록: 기본으로 펼쳐지고 오늘의 퀘스트 바로 아래에 온다 */
+  function detailSection(d) {
+    var p = d.participant;
+    var plan = d.plan;
+    var entry = d.entry || {};
+    var fast = d.fast;
+    var photos = M.photoKeys.map(function (k) {
+      return photoControl(k, entry, (M.photoLabel[k] || '인증') + ' 인증');
+    }).join('');
+    return '<details class="card fold"' + (d.foldOpen ? ' open' : '') + '>' +
+      '<summary><span>세부 기록</span><em>식단 · 인증사진 · 영양 · 생활 루틴</em></summary>' +
+      '<div class="fold-body">' +
+        '<div class="subhead"><h2>식단 · 영양</h2><button class="link-btn" data-act="edit-plan">계획 수정</button></div>' +
+        (fast ? '<p class="fast-note">' + icon('cup') + '<span>24시간 단식일이에요. 물·허브티만 마시고 영양제는 쉬어가요.</span></p>' : '') +
+        '<div class="meal-list">' + Program.meals.map(function (m) { return mealRow(plan, m, entry); }).join('') + '</div>' +
+        (function () {
+          var pd = periodFor(d.day);
+          return pd && pd.mealNote ? '<p class="note-line">' + esc(pd.mealNote) + '</p>' : '';
+        })() +
+        '<div class="subhead"><h2>인증사진</h2><span class="hint">올리면 해당 항목이 자동 체크돼요</span></div>' +
+        '<div class="photo-grid">' + photos + '</div>' +
+        '<div class="sub-list">' +
+          ['morning', 'evening'].map(function (k) {
+            var on = !!(entry.supplements && entry.supplements[k]);
+            var label = k === 'morning' ? '아침 영양제' : '저녁 영양제';
+            var supHint = (Program.w1Plan && Program.w1Plan.days.indexOf(Number(d.day)) >= 0)
+              ? Program.w1Plan.supplementShort[k] : '';
+            if (fast) {
+              return '<div class="switch-row compact is-na">' +
+                '<span class="switch-text"><b>' + label + '</b><small>단식일엔 쉬어가요</small></span>' +
+                '<span class="tick disabled" aria-hidden="true">–</span>' +
+                '</div>';
+            }
+            return '<button class="switch-row compact" data-act="toggle-supp" data-supp="' + k + '" role="switch" aria-checked="' + on + '">' +
+              '<span class="switch-text"><b>' + label + '</b>' + (supHint ? '<small>' + esc(supHint) + '</small>' : '') + '</span>' +
+              '<span class="tick ' + (on ? ' on' : '') + '" aria-hidden="true">' + (on ? icon('check') : '') + '</span>' +
+              '</button>';
+          }).join('') +
+        '</div>' +
+        waterBlock(entry) +
+        '<div class="subhead"><h2>생활 루틴</h2><span class="hint">자동 저장</span></div>' +
+        '<div class="switch-list">' +
+          switchRow('fasting14', fast ? '단식 ' + Program.check.fastMinHours + '시간 이상' : '공복시간 유지', fast ? Program.check.fastMinHours + '~' + Program.check.fast24Hours + '시간 유연 기준 · 24시간이면 🏆' : Program.check.fastingHours + '시간 · 저녁은 취침 4시간 전', !!entry.fasting14) +
+          switchRow('sleep', '수면', Program.check.sleepHours + '시간 이상 · 밤 12~4시 포함', !!entry.sleep) +
+          '<div class="switch-row static">' +
+            '<span class="switch-text"><b>운동</b><small>웨이트 20분+ · 유산소 40분+</small></span>' +
+            '<span class="ex-chips">' +
+              '<button class="chip-btn ' + (entry.exercise && entry.exercise.weight ? 'on' : '') + '" data-act="toggle-exercise" data-kind="weight" aria-pressed="' + !!(entry.exercise && entry.exercise.weight) + '">웨이트</button>' +
+              '<button class="chip-btn ' + (entry.exercise && entry.exercise.cardio ? 'on' : '') + '" data-act="toggle-exercise" data-kind="cardio" aria-pressed="' + !!(entry.exercise && entry.exercise.cardio) + '">유산소</button>' +
+            '</span>' +
+          '</div>' +
+          switchRow('menstruation', '생리', '기록용', !!entry.menstruation) +
+          switchRow('bowel', '대변', '기록', !!entry.bowel) +
+        '</div>' +
+      '</div>' +
+    '</details>';
   }
 
   function today(d) {
@@ -719,7 +770,6 @@
       (d.isToday ? '' : '<p class="note-line">' + esc(M.fmtLong(d.date)) + ' 날짜를 보는 중이에요. 타이머는 지금 시간 기준으로 보여드려요.</p>');
 
     var quote = quoteBanner(d.quote, d.day);
-    var foods = foodBar(d);
     var quests = questSection(d);
 
     var metrics = '<section class="card">' +
@@ -736,51 +786,7 @@
       '</div>' +
     '</section>';
 
-    var details = '<details class="card fold"' + (d.foldOpen ? ' open' : '') + '>' +
-      '<summary><span>세부 기록</span><em>식단 · 영양 · 생활 루틴</em></summary>' +
-      '<div class="fold-body">' +
-        '<div class="subhead"><h2>식단 · 영양</h2><button class="link-btn" data-act="edit-plan">계획 수정</button></div>' +
-        (fast ? '<p class="fast-note">' + icon('cup') + '<span>24시간 단식일이에요. 물·허브티만 마시고 영양제는 쉬어가요.</span></p>' : '') +
-        '<div class="meal-list">' + Program.meals.map(function (m) { return mealRow(plan, m, entry); }).join('') + '</div>' +
-        (function () {
-          var pd = periodFor(d.day);
-          return pd && pd.mealNote ? '<p class="note-line">' + esc(pd.mealNote) + '</p>' : '';
-        })() +
-        '<div class="sub-list">' +
-          ['morning', 'evening'].map(function (k) {
-            var on = !!(entry.supplements && entry.supplements[k]);
-            var label = k === 'morning' ? '아침 영양제' : '저녁 영양제';
-            var supHint = (Program.w1Plan && Program.w1Plan.days.indexOf(Number(d.day)) >= 0)
-              ? Program.w1Plan.supplementShort[k] : '';
-            if (fast) {
-              return '<div class="switch-row compact is-na">' +
-                '<span class="switch-text"><b>' + label + '</b><small>단식일엔 쉬어가요</small></span>' +
-                '<span class="tick disabled" aria-hidden="true">–</span>' +
-                '</div>';
-            }
-            return '<button class="switch-row compact" data-act="toggle-supp" data-supp="' + k + '" role="switch" aria-checked="' + on + '">' +
-              '<span class="switch-text"><b>' + label + '</b>' + (supHint ? '<small>' + esc(supHint) + '</small>' : '') + '</span>' +
-              '<span class="tick ' + (on ? 'on' : '') + '" aria-hidden="true">' + (on ? icon('check') : '') + '</span>' +
-              '</button>';
-          }).join('') +
-        '</div>' +
-        waterBlock(entry) +
-        '<div class="subhead"><h2>생활 루틴</h2><span class="hint">자동 저장</span></div>' +
-        '<div class="switch-list">' +
-          switchRow('fasting14', fast ? '단식 ' + Program.check.fastMinHours + '시간 이상' : '공복시간 유지', fast ? Program.check.fastMinHours + '~' + Program.check.fast24Hours + '시간 유연 기준 · 24시간이면 🏆' : Program.check.fastingHours + '시간 · 저녁은 취침 4시간 전', !!entry.fasting14) +
-          switchRow('sleep', '수면', Program.check.sleepHours + '시간 이상 · 밤 12~4시 포함', !!entry.sleep) +
-          '<div class="switch-row static">' +
-            '<span class="switch-text"><b>운동</b><small>웨이트 20분+ · 유산소 40분+</small></span>' +
-            '<span class="ex-chips">' +
-              '<button class="chip-btn ' + (entry.exercise && entry.exercise.weight ? 'on' : '') + '" data-act="toggle-exercise" data-kind="weight" aria-pressed="' + !!(entry.exercise && entry.exercise.weight) + '">웨이트</button>' +
-              '<button class="chip-btn ' + (entry.exercise && entry.exercise.cardio ? 'on' : '') + '" data-act="toggle-exercise" data-kind="cardio" aria-pressed="' + !!(entry.exercise && entry.exercise.cardio) + '">유산소</button>' +
-            '</span>' +
-          '</div>' +
-          switchRow('menstruation', '생리', '기록용', !!entry.menstruation) +
-          switchRow('bowel', '대변', '기록', !!entry.bowel) +
-        '</div>' +
-      '</div>' +
-    '</details>';
+    var details = detailSection(d);
 
     var memo = '<section class="card">' +
       '<div class="card-head"><h2>오늘 메모</h2><span class="hint">입력 후 바깥을 누르면 저장</span></div>' +
@@ -792,7 +798,7 @@
       ? '<section class="card"><div class="card-head"><h2>관리자 피드백</h2></div>' + feedbackList(d.feedback.slice().reverse(), false) + '</section>'
       : '';
 
-    return hero + daynav + timers + quote + quests + foods + sponsorSlot(d.promo) + metrics + details + memo + feedback;
+    return hero + daynav + timers + quote + quests + details + sponsorSlot(d.promo) + metrics + memo + feedback;
   }
 
   /* ---------------- 28일 보드 ---------------- */
@@ -862,6 +868,18 @@
       ' — 개인 일정에 맞게 옮길 수 있어요(연속 단식 금지).' + move + '</p>';
   }
 
+  /* 보드 블록 하나 (일차 묶음 + 주차/기간 요약 + 체크 그리드) */
+  function boardBlock(o) {
+    return '<section class="week-block">' +
+      '<div class="week-block-head"><span class="week-title">' + esc(o.title) + '</span><span class="week-sub">' + esc(o.subtitle) + '</span></div>' +
+      '<div class="wk-briefs">' + o.briefs.filter(Boolean).map(briefCard).join('') + '</div>' +
+      foodChipsBlock(o.food) +
+      weekFastLine(o.list, o.week) +
+      '<div class="board-grid ' + (o.gridCls || '') + '">' + o.list.map(cell).join('') + '</div>' +
+      (o.cards ? '<div class="day-cards">' + o.list.map(dayCard).join('') + '</div>' : '') +
+    '</section>';
+  }
+
   function board(d) {
     var days = d.days;
     var cur = d.currentDay;
@@ -880,29 +898,47 @@
     '<p class="legend-note">셀 아래 6칸은 <b>식단 · 물 · 영양제 · 공복 · 수면 · 운동</b> 순서예요. 초록 O, 코랄 X, 회색 미입력.</p>';
 
     var body = '';
+    /* 1주차는 D1~3 / D4~7 두 블록으로 나눠 보여준다 */
+    var d13 = days.filter(function (x) { return x.day <= 3; });
+    var d47 = days.filter(function (x) { return x.day >= 4 && x.day <= 7; });
+    var w1 = Program.weeks[0] || {};
     if (String(d.week) === 'all') {
-      Program.weeks.forEach(function (w) {
-        var cells = days.filter(function (x) { return x.week === w.week; }).map(cell).join('');
+      body += boardBlock({
+        title: '1~3일차', subtitle: 'D1~3 · 당질 제한 · 장 해독',
+        briefs: [Program.detox], food: { allow: Program.detox.chips, avoid: Program.detox.forbiddenChips },
+        list: d13, week: 1, gridCls: 'span3'
+      });
+      body += boardBlock({
+        title: '4~7일차 · 1주차', subtitle: 'D4~7 · 단백질 중심 유지 · 현미 점심 도입',
+        briefs: [Program.w1Plan], food: { allow: Program.w1Plan.chips, avoid: Program.w1Plan.forbiddenChips },
+        list: d47, week: 1, gridCls: 'span4'
+      });
+      Program.weeks.slice(1).forEach(function (w) {
         var wkList = days.filter(function (x) { return x.week === w.week; });
-        body += '<section class="week-block">' +
-          '<div class="week-block-head"><span class="week-title">' + esc(w.title) + '</span><span class="week-sub">' + esc(w.subtitle) + '</span></div>' +
-          weekBriefs(w.week) +
-          weekFastLine(wkList, w.week) +
-          weekdaysRow() +
-          '<div class="board-grid">' + cells + '</div>' +
-        '</section>';
+        body += boardBlock({
+          title: w.title, subtitle: w.subtitle,
+          briefs: [(Program.periods || [])[w.week]], food: blockFood(w.week), list: wkList, week: w.week
+        });
+      });
+    } else if (String(d.week) === '1') {
+      body += boardBlock({
+        title: '1~3일차', subtitle: 'D1~3 · 당질 제한 · 장 해독',
+        briefs: [Program.detox], food: { allow: Program.detox.chips, avoid: Program.detox.forbiddenChips },
+        list: d13, week: 1, gridCls: 'span3 big', cards: true
+      });
+      body += boardBlock({
+        title: '4~7일차 · 1주차', subtitle: 'D4~7 · 단백질 중심 유지 · 현미 점심 도입',
+        briefs: [Program.w1Plan], food: { allow: Program.w1Plan.chips, avoid: Program.w1Plan.forbiddenChips },
+        list: d47, week: 1, gridCls: 'span4 big', cards: true
       });
     } else {
       var wk = Number(d.week);
-      var w = Program.weeks[wk - 1];
+      var w = Program.weeks[wk - 1] || w1;
       var list = days.filter(function (x) { return x.week === wk; });
-      body += '<section class="week-block">' +
-        '<div class="week-block-head"><span class="week-title">' + esc(w.title) + '</span><span class="week-sub">' + esc(w.summary) + '</span></div>' +
-        weekBriefs(wk) +
-        weekFastLine(list, wk) +
-        '<div class="board-grid big">' + list.map(cell).join('') + '</div>' +
-        '<div class="day-cards">' + list.map(dayCard).join('') + '</div>' +
-      '</section>';
+      body += boardBlock({
+        title: w.title, subtitle: w.summary,
+        briefs: [(Program.periods || [])[wk]], food: blockFood(wk), list: list, week: wk, gridCls: 'big', cards: true
+      });
     }
 
     var jump = '<div class="board-jump"><button class="btn ghost sm" data-act="go-today">오늘 기록하러 가기</button><button class="btn ghost sm" data-act="nav" data-route="tutorial">주차별 허용식품</button></div>';

@@ -31,7 +31,7 @@
     route: 'today',
     day: null,
     boardWeek: 'all',
-    foldOpen: false,
+    foldOpen: true,
     promoType: 'all',
     promoCat: 'all',
     adminTab: 'participants',
@@ -294,6 +294,7 @@
       fast: M.isFastDay(plan),
       photos: (entry && entry.photos) || {},
       foldOpen: state.foldOpen,
+      questTimes: M.questTimes(p),
       quests: M.quests(plan, entry, day),
       promo: M.featuredPromo(activePromos()),
       feedback: (p.feedback || []).slice(-3)
@@ -482,10 +483,41 @@
     toast(label + ' 사진을 준비하고 있어요...');
     try {
       var shot = await Photo.compress(file, label, new Date());
+      var day = viewDay();
       var patch = { photos: {} };
       patch.photos[key] = shot;
+      /* 사진의 촬영(첨부) 시각에 맞춰 해당 항목을 알아서 체크하고, 아침·저녁은 타이머 기록에도 남긴다 */
+      var plan = M.getPlan(state.participant, day);
+      if (Program.meals.indexOf(key) >= 0 && plan[key] !== 'FAST') {
+        patch.meals = {};
+        patch.meals[key] = true;
+      }
+      if (key === 'exercise') patch.exercise = { weight: true, cardio: true };
+      var shotAt = shot.at ? new Date(shot.at) : new Date();
+      var shotHM = isNaN(shotAt.getTime()) ? M.clockOf(new Date()) : M.clockOf(shotAt);
+      var sameDay = isNaN(shotAt.getTime()) ? true : M.fmtDate(shotAt) === M.dayDate(state.participant.startDate, day);
+      var linked = null;
+      if (key === 'breakfast' && sameDay && plan.breakfast !== 'FAST') {
+        patch.breakfastAt = shotHM;
+        linked = '아침 식사';
+      }
+      if (key === 'dinner' && sameDay) {
+        patch.lastMealAt = shotHM;
+        linked = '저녁 식사 시작';
+      }
       await updateEntry(patch);
-      toast(label + ' 인증사진 저장 완료 · ' + Math.max(1, Math.round((shot.bytes || 0) / 1024)) + 'KB');
+      if (key === 'dinner' && sameDay) {
+        var settings = Object.assign({}, state.participant.settings || {});
+        settings.lastMeals = Object.assign({}, (settings.lastMeals && typeof settings.lastMeals === 'object') ? settings.lastMeals : {});
+        settings.lastMeals[String(day)] = shotHM;
+        try {
+          var updated = await store.updateParticipant(state.participant.id, { settings: settings });
+          applyParticipant(updated);
+          render();
+        } catch (e2) { /* 사진은 이미 저장됐으니 설정 실패는 넘긴다 */ }
+      }
+      toast(label + ' 인증사진 저장 완료 · ' + Math.max(1, Math.round((shot.bytes || 0) / 1024)) + 'KB' +
+        (linked ? ' · ' + shotHM + ' ' + linked + ' 체크' : ''));
     } catch (e) {
       toast((e && e.message) || '사진을 저장하지 못했어요', 'error');
     } finally {
@@ -577,6 +609,32 @@
     }
   }
 
+  /* 퀘스트(투두) 시간대 저장 */
+  async function saveQuestTime(key, value) {
+    var p = state.participant;
+    if (!p || !key) return;
+    var settings = Object.assign({}, p.settings || {});
+    var times = Object.assign({}, M.questTimes(p));
+    var norm = M.normHM(value, '');
+    if (!norm) { toast('시각을 확인해주세요', 'error'); return; }
+    times[key] = norm;
+    settings.questTimes = times;
+    try {
+      var updated = await store.updateParticipant(p.id, { settings: settings });
+      applyParticipant(updated);
+      render();
+      toast('시간대를 ' + norm + '으로 바꿨어요');
+    } catch (e) {
+      toast('저장하지 못했어요: ' + e.message, 'error');
+    }
+  }
+
+  /* 아침 · 저녁 퀘스트 체크 ↔ 공복 · 저녁 타이머 기록을 함께 맞춘다 */
+  async function toggleMealByQuest(kind, on) {
+    if (on) { await saveMealClock(kind, M.clockOf(new Date())); return; }
+    await toggleMealClock(kind);
+  }
+
   /* 아침 식사 · 저녁 식사 체크: 누른 순간의 시각을 그 날 기록에 남긴다 */
   async function toggleMealClock(kind) {
     var p = state.participant;
@@ -588,6 +646,10 @@
     if (saved) {
       var off = {};
       off[field] = null;
+      if (!(M.getPlan(p, day)[kind] === 'FAST')) {
+        off.meals = {};
+        off.meals[kind] = false;
+      }
       await updateEntry(off);
       if (kind === 'dinner') await clearDayLastMeal(day);
       toast(kind === 'breakfast' ? '아침 식사 기록을 지웠어요' : '저녁 식사 기록을 지웠어요');
@@ -616,8 +678,13 @@
     var day = viewDay();
     var norm = M.normHM(hm, '');
     if (!norm) { toast('시각을 확인해주세요', 'error'); return; }
+    var mealSlot = kind === 'breakfast' ? 'breakfast' : 'dinner';
     var patch = {};
     patch[kind === 'breakfast' ? 'breakfastAt' : 'lastMealAt'] = norm;
+    if (M.getPlan(p, day)[mealSlot] !== 'FAST') {
+      patch.meals = {};
+      patch.meals[mealSlot] = true;
+    }
     await updateEntry(patch);
     if (kind === 'dinner') {
       /* 그 날의 마지막 식사 시각을 설정에도 남겨 다음 날 공복·단식 타이머가 그대로 쓴다 */
@@ -639,8 +706,7 @@
   }
 
   /* 단식일 24시간 타이머의 기준 시각(전날 마지막 식사)은 그 날짜에만 적용해 저장한다 */
-  async function saveFastPrevMeal(value) {
-    var p = state.participant;
+  async function saveFastPrevMeal(value) {    var p = state.participant;
     if (!p) return;
     var norm = M.normHM(value, '');
     if (!norm) { toast('시각을 확인해주세요', 'error'); return; }
@@ -1236,9 +1302,14 @@
           break;
         }
         if (Program.meals.indexOf(qk) >= 0) {
-          var qm = qe.meals || {};
+          /* 아침 · 저녁은 공복 · 저녁 타이머 기록과도 같이 움직인다 */
+          var done = !!(qe.meals && qe.meals[qk]);
+          if (qk === 'breakfast' || qk === 'dinner') {
+            await toggleMealByQuest(qk, !done);
+            break;
+          }
           var qpatch = { meals: {} };
-          qpatch.meals[qk] = !qm[qk];
+          qpatch.meals[qk] = !done;
           await updateEntry(qpatch);
         }
         break;
@@ -1562,6 +1633,10 @@
     }
     if (field === 'fastPrevMeal') {
       await saveFastPrevMeal(el.value);
+      return;
+    }
+    if (field === 'questTime') {
+      await saveQuestTime(el.getAttribute('data-quest'), el.value);
       return;
     }
     if (field === 'breakfastAt' || field === 'dinnerAt') {
