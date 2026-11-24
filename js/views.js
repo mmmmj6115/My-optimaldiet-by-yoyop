@@ -1397,7 +1397,7 @@
 
     var foot = '<div class="rs-foot"><b>@yoyop_diet</b><span>' + esc(Program.name) + ' · 28일 루틴 · v' + esc(Program.version) + '</span></div>' +
       '<button class="btn primary block rs-save" data-act="save-report-image">📷 리포트 이미지 저장 (PNG)</button>' +
-      '<p class="hint center">저장한 이미지에는 달성률 요약 · 인바디 변화 · 잘 지킨/아쉬웠던 루틴만 담겨요. 유지기 가이드는 이 화면 아래에서 볼 수 있어요.</p>';
+      '<p class="hint center">저장한 이미지에는 달성률 요약 · 인바디 변화 · 잘 지킨/아쉬웠던 루틴만 담겨요. 유지기 가이드는 이 리포트에서 함께 볼 수 있어요.</p>';
 
     return sheetWrap(
       sheetHead('🏆 28일 최종 리포트', r.nickname + ' · ' + M.fmtShort(r.startDate) + ' ~ ' + M.fmtShort(r.endDate)) +
