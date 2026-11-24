@@ -1343,7 +1343,8 @@
     var inbody = '<section class="rs-sec" id="rs-inbody">' +
       '<h3>최종 인바디 변화</h3>' +
       '<p class="hint">' + (ib.start && ib.latest
-        ? '시작 ' + esc(M.fmtShort(ib.start.date)) + ' → 최신 ' + esc(M.fmtShort(ib.latest.date)) + ' (' + esc('Day ' + ib.latest.day) + ' 기록)'
+        ? '시작 ' + esc(M.fmtShort(ib.start.date)) + ' → 최신 ' + esc(M.fmtShort(ib.latest.date)) + ' (' + esc('Day ' + ib.latest.day) + ' 기록)' +
+          (ib.postFast ? ' · 단식 다음날 측정이라 수분 영향이 있을 수 있어요' : '')
         : '인바디 기록이 아직 없어요. 오늘 탭에서 시작 인바디를 넣어 주세요.') + '</p>' +
       '<div class="rs-ib">' +
         reportIbRow(ib, 'weight', '몸무게', 'kg', 1) +

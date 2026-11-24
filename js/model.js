@@ -817,7 +817,8 @@
 
     var wm = weeklyMetrics(p, today);
     var startM = wm.start;
-    var latestM = wm.latest || wm.latestAny;
+    /* 최종 리포트는 '최신 기록'을 보여준다 (단식일 다음날 측정이어도 사용자가 본 마지막 수치) */
+    var latestM = wm.latestAny || wm.latest;
     function changeOf(key) {
       if (!startM || !latestM) return null;
       if (typeof startM[key] !== 'number' || typeof latestM[key] !== 'number') return null;
@@ -828,6 +829,7 @@
       latest: latestM,
       latestDay: latestM ? latestM.day : null,
       latestDate: latestM ? latestM.date : null,
+      postFast: latestM ? isPostFastDay(p, latestM.day) : false,
       changes: {
         weight: changeOf('weight'), muscle: changeOf('muscle'),
         fat: changeOf('fat'), visceral: changeOf('visceral')
