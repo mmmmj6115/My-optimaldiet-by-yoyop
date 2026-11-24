@@ -232,6 +232,7 @@
     var leftMin = targetMin - elapsedMin;
     var minH = Number(Program.check.fastMinHours) || 18;
     var minMin = minH * 60;
+    var viewToday = fmtDate(nowD) === fmtDate(new Date(start.getTime() + DAY_MS));
     return {
       day: d,
       hours: targetHours,
@@ -245,7 +246,9 @@
       endClock: clockOf(end),
       startDate: fmtDate(start),
       endDate: fmtDate(end),
-      isViewToday: fmtDate(nowD) === fmtDate(new Date(start.getTime() + DAY_MS)),
+      isViewToday: viewToday,
+      /* 이미 지나간 단식일 — 그 날 기록이 없는데 '달성'이라고 단정하지 않는다 */
+      isPast: !viewToday && fmtDate(nowD) > dateStr,
       beforeStart: elapsedMin < 0,
       elapsedMin: elapsedMin,
       leftMin: leftMin,

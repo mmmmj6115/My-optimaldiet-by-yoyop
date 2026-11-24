@@ -417,12 +417,14 @@
     var cap = (s.isViewToday ? '전날 ' : M.fmtShort(s.startDate) + ' ') + s.startClock + ' 마지막 식사 → ' +
       (s.isViewToday ? '오늘 ' : M.fmtShort(s.endDate) + ' ') + s.endClock + '까지 (' + s.hours + '시간)';
     var val;
-    if (s.done) val = '<span class="big-num">' + s.hours + '시간 단식 달성!</span> 🏆';
+    if (s.done && s.isPast) val = '<span class="big-num">' + s.hours + '시간 창이 끝났어요</span>';
+    else if (s.done) val = '<span class="big-num">' + s.hours + '시간 단식 달성!</span> 🏆';
     else if (s.beforeStart) val = '<span class="big-num">' + s.startClock + '</span> <em>부터 시작해요</em>';
     else val = '<span class="big-num">' + esc(s.leftText) + '</span> <em>남았어요</em>';
-    var pill = s.done ? '달성' : (s.beforeStart ? '시작 전' : (s.minPassed ? s.minHours + '시간 통과' : '진행 중'));
+    var pill = s.isPast ? '지난 단식일' : (s.done ? '달성' : (s.beforeStart ? '시작 전' : (s.minPassed ? s.minHours + '시간 통과' : '진행 중')));
     var minLine;
-    if (s.done) minLine = s.minHours + '시간 최소 기준 통과 ✓ · ' + s.hours + '시간 달성 🏆';
+    if (s.isPast) minLine = s.minHours + '시간 최소 기준 · ' + s.hours + '시간 창이 이미 지난 날이에요';
+    else if (s.done) minLine = s.minHours + '시간 최소 기준 통과 ✓ · ' + s.hours + '시간 달성 🏆';
     else if (s.beforeStart) minLine = s.minHours + '시간 최소 기준 · 시작 후 ' + s.minHours + '시간이면 통과예요';
     else if (s.minPassed) minLine = s.minHours + '시간 최소 기준 통과 ✓ · ' + s.hours + '시간까지 ' + esc(s.leftText) + ' 남았어요';
     else minLine = s.minHours + '시간 최소 기준까지 ' + esc(s.minLeftText) + ' 남았어요';
