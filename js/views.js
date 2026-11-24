@@ -682,7 +682,7 @@
       ? '<section class="card"><div class="card-head"><h2>관리자 피드백</h2></div>' + feedbackList(d.feedback.slice().reverse(), false) + '</section>'
       : '';
 
-    return hero + daynav + timers + quote + foods + quests + sponsorSlot(d.promo) + metrics + details + memo + feedback;
+    return hero + daynav + timers + quote + quests + foods + sponsorSlot(d.promo) + metrics + details + memo + feedback;
   }
 
   /* ---------------- 28일 보드 ---------------- */
