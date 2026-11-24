@@ -779,7 +779,9 @@
       go('today');
       render();
       if (toDay) {
-        toast('Day ' + fromDay + ' → Day ' + toDay + '로 단식일을 옮겼어요 · Day ' + toDay + '에 24시간 타이머가 떠요');
+        toast(fromDay
+          ? 'Day ' + fromDay + ' → Day ' + toDay + '로 단식일을 옮겼어요 · Day ' + toDay + '에 24시간 타이머가 떠요'
+          : 'Day ' + toDay + '을 단식일로 지정했어요 · 24시간 타이머가 떠요');
       } else {
         toast('Day ' + fromDay + ' 단식일을 해제했어요 · 14시간 공복 타이머로 바뀌었어요');
       }
