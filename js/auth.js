@@ -8,7 +8,7 @@
   'use strict';
 
   var CFG = global.App.Config;
-  var SESSION_KEY = 'mod.v1.session';
+  var SESSION_KEY = 'mod.v2.session';
 
   function readSession() {
     try {
@@ -105,11 +105,24 @@
     return saved;
   }
 
-  function signInDemo(role, participantId) {
+  function signInDemo(participantId) {
     var session = {
       provider: 'demo',
-      role: role === 'admin' ? 'admin' : 'participant',
+      role: 'participant',
       participantId: participantId,
+      createdAt: new Date().toISOString()
+    };
+    writeSession(session);
+    return session;
+  }
+
+  /* 관리자 코드 입력으로만 만드는 세션 (로그인 화면의 원클릭 체험 버튼 없음) */
+  function signInAdmin(participantId) {
+    var session = {
+      provider: 'admin',
+      role: 'admin',
+      adminLogin: true,
+      participantId: participantId || null,
       createdAt: new Date().toISOString()
     };
     writeSession(session);
@@ -144,6 +157,7 @@
     writeSession: writeSession,
     signInWithKakao: signInWithKakao,
     signInDemo: signInDemo,
+    signInAdmin: signInAdmin,
     signInCode: signInCode,
     signOut: signOut,
     resume: resume,

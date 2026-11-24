@@ -31,6 +31,7 @@
     };
     Program.meals.forEach(function (m) {
       if (plan[m] === 'FAST') return;
+      if (o.noMeals) { e.meals[m] = false; return; }
       e.meals[m] = !(o.miss && o.miss.indexOf(m) >= 0);
     });
     return e;
@@ -54,24 +55,17 @@
   function build(today) {
     var t = today || M.todayStr();
 
-    /* 1) 박민정 — 오늘 Day 9, 1주차까지 성실히 기록, 오늘은 아직 미체크 */
-    var p1 = participant('p1', '박민정', '1234', M.addDays(t, -8), '민정');
-    var p1Days = [
-      { weight: 68.4, muscle: 23.1, fat: 27.5, visceral: 9, water: 6, f14: true, sleep: true, cd: true, bowel: true, se: false, miss: ['snack'], memo: '첫날! 쉐이크 네 번, 생각보다 배부르네요.' },
-      { weight: 68.0, muscle: 23.0, fat: 27.2, visceral: 9, water: 8, f14: true, sleep: true, wt: true, bowel: true },
-      { weight: 67.6, muscle: 22.9, fat: 26.8, visceral: 9, water: 5, cd: true, bowel: true, miss: ['lunch'], se: false, memo: '점심 약속이 있어서 쉐이크를 못 챙겼어요.' },
-      { weight: 67.1, muscle: 22.9, fat: 26.5, visceral: 8, water: 8, f14: true, sleep: true, wt: true, cd: true, bowel: true },
-      { weight: 66.8, muscle: 22.8, fat: 26.2, visceral: 8, water: 7, f14: true, wt: true, miss: ['dinner'] },
-      { weight: 66.4, muscle: 22.8, fat: 26.0, visceral: 8, water: 8, f14: true, sleep: true, cd: true, bowel: true },
-      { weight: 66.1, muscle: 22.7, fat: 25.8, visceral: 8, water: 8, f14: true, sleep: true, wt: true, bowel: true, memo: '허리 바지가 좀 헐렁해졌어요!' },
-      { weight: 65.9, muscle: 22.8, fat: 25.6, visceral: 7, water: 6, f14: true, sleep: true, cd: true, bowel: true, miss: ['snack'], memo: '주말 가족 외식 — 샐러드로 먹었어요.' }
-    ];
-    p1Days.forEach(function (o, i) { p1.entries[String(i + 1)] = mkEntry(p1, i + 1, o); });
+    /* 1) 김유니 — 가상 인물. 시작일이 오늘(Day 1)이고, 시작 인바디만 입력한 상태 */
+    var p1 = participant('p1', '김유니', '1234', t, '유니');
+    p1.entries['1'] = mkEntry(p1, 1, {
+      weight: 61.5, muscle: 21.5, fat: 21.0, visceral: 5,
+      water: 0, sm: false, se: false, noMeals: true,
+      memo: '오늘부터 28일 시작!' });
     p1.feedback.push({
       id: 'f1',
-      day: 8,
-      text: '1주차 고생 많았어요! 물 8잔은 잘 지키고 있네요. 2주차 단식일(Day 10)이 일정과 겹치면 하루 앞이나 뒤로 옮겨도 됩니다. 연속 단식만 피해주세요.',
-      createdAt: isoAt(M.dayDate(p1.startDate, 8), '21:10')
+      day: 1,
+      text: '첫날이에요! 물 8잔과 공복 14시간만 챙겨도 절반은 성공이에요. 28일 함께 가요.',
+      createdAt: isoAt(t, '07:40')
     });
 
     /* 2) 김서연 — 오늘 Day 16, 꾸준히 기록 중 */

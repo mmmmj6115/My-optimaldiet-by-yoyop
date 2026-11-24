@@ -11,7 +11,21 @@
   var storage = global.localStorage;
   var store = CFG.dataMode === 'rest'
     ? global.App.Store.createRest({ baseUrl: CFG.rest.baseUrl })
-    : global.App.Store.createLocal({ storage: storage, namespace: 'mod.v1' });
+    : global.App.Store.createLocal({ storage: storage, namespace: 'mod.v2' });
+
+  /* 이전 버전(mod.v1)의 데모 데이터·세션 정리 — 실제 개인 데이터가 남지 않도록 */
+  (function purgeLegacyStorage() {
+    try {
+      ['mod.v1.session', 'mod.v1.participants', 'mod.v1.promos', 'mod.v1.seeded'].forEach(function (k) { storage.removeItem(k); });
+    } catch (e) { /* 저장소를 쓸 수 없으면 그냥 넘어간다 */ }
+  })();
+
+  /* 관리자 전용 동작: 관리자 코드로 로그인한 세션에서만 처리한다 */
+  var ADMIN_ACTS = {
+    'admin-tab': 1, 'admin-open': 1, 'admin-back': 1, 'open-add': 1,
+    'export-summary': 1, 'export-detail': 1, 'copy-code': 1, 'reset-demo': 1,
+    'promo-new': 1, 'promo-edit': 1, 'promo-toggle': 1, 'promo-delete': 1
+  };
 
   var state = {
     route: 'today',
@@ -35,6 +49,8 @@
   };
 
   function today() { return M.todayStr(); }
+
+  function isAdminSession() { return !!(state.session && state.session.role === 'admin'); }
 
   function $(id) { return global.document.getElementById(id); }
 
@@ -72,6 +88,9 @@
   /* ---------------- 라우팅 ---------------- */
   function parseRoute() {
     var h = String(global.location.hash || '').replace(/^#\/?/, '');
+    var wantsAdmin = h === 'admin' || h === 'admin/promos' || h.indexOf('admin/') === 0;
+    /* 관리자 코드로 들어온 세션이 아니면 주소로도 관리자 화면을 열 수 없다 */
+    if (wantsAdmin && !isAdminSession()) { state.route = 'today'; state.adminId = null; return; }
     if (h === 'board') { state.route = 'board'; state.boardTab = 'check'; return; }
     if (h === 'body') { state.route = 'board'; state.boardTab = 'inbody'; return; }
     if (h === 'promos') { state.route = 'promos'; return; }
@@ -165,7 +184,7 @@
     var app = $('app');
     if (!view) return;
 
-    if (!state.participant) {
+    if (!state.participant && !isAdminSession()) {
       app.classList.add('gate-mode');
       view.innerHTML = Views.gate({ authMode: CFG.authMode });
       nav.innerHTML = '';
@@ -176,6 +195,17 @@
     app.classList.remove('gate-mode');
     nav.hidden = false;
 
+    /* 참여자 세션은 관리자 화면·관리자 상세로 갈 수 없다 */
+    if (!isAdminSession() && (state.route === 'admin' || state.route === 'adminDetail')) {
+      state.route = 'today';
+      state.adminId = null;
+    }
+    /* 관리자 세션에 참여자 프로필이 없으면 관리자 화면만 보여준다 */
+    if (!state.participant && isAdminSession() && state.route !== 'admin' && state.route !== 'adminDetail') {
+      state.route = 'admin';
+      state.adminTab = 'participants';
+    }
+
     var html = '';
     try {
       if (state.route === 'board') {
@@ -183,7 +213,7 @@
       } else if (state.route === 'promos') {
         html = Views.promos(promosData());
       } else if (state.route === 'guide') {
-        html = Views.guide({ week: state.guideWeek });
+        html = Views.guide(guideData());
       } else if (state.route === 'admin') {
         html = Views.admin(adminData());
       } else if (state.route === 'adminDetail') {
@@ -199,7 +229,7 @@
     }
 
     view.innerHTML = html;
-    nav.innerHTML = Views.tabbar({ route: state.route });
+    nav.innerHTML = Views.tabbar({ route: state.route, role: state.session ? state.session.role : 'participant' });
 
     var key = state.route + '|' + state.adminTab + '|' + state.adminId + '|' + state.boardTab + '|' + state.guideWeek + '|' + state.promoType + '|' + state.promoCat;
     if (state.lastKey && key !== state.lastKey) {
@@ -256,11 +286,12 @@
       fasting: M.fastingState(prefs.lastMeal, now, Program.check.fastingHours),
       fasting24: M.fastingState(prefs.lastMeal, now, Program.check.fast24Hours),
       sleep: M.sleepState(prefs.wake, now, Program.check.sleepHours),
+      dinner: M.dinnerState(prefs.wake, now, M.dinnerMode(p, day)),
       quote: M.quoteFor(day),
       fast: M.isFastDay(plan),
       photos: (entry && entry.photos) || {},
       foldOpen: state.foldOpen,
-      quests: M.quests(plan, entry),
+      quests: M.quests(plan, entry, day),
       promo: M.featuredPromo(activePromos()),
       feedback: (p.feedback || []).slice(-3)
     };
@@ -277,6 +308,12 @@
       overall: M.overallRate(p, today()),
       weekly: M.weeklyMetrics(p, today())
     };
+  }
+
+  function guideData() {
+    var p = state.participant;
+    var lv = p ? M.latestValues(p, Program.totalDays, ['weight']).weight : null;
+    return { week: state.guideWeek, weight: lv ? lv.value : null };
   }
 
   function promosData() {
@@ -457,6 +494,35 @@
   }
 
   /* 타이머 시각(마지막 식사 · 기상 목표)은 참여자 설정으로 저장해 매일 써요 */
+  function paintDinner(t) {
+    if (!t) return;
+    setHtmlIfChanged($('t-dinner-cap'), t.done ? '마감 시각이 지났어요' : '저녁 식사는 ' + t.deadlineClock + '까지');
+    setHtmlIfChanged($('t-dinner-value'), t.done
+      ? '<span class="big-num">마감 ' + Views.esc(t.overText) + ' 지났어요</span>'
+      : '<span class="big-num">' + Views.esc(t.leftText) + '</span> <em>남았어요</em>');
+    setHtmlIfChanged($('t-dinner-state'), Views.esc(t.emoji + ' ' + t.tag));
+    setHtmlIfChanged($('t-dinner-meta'), '취침 ' + t.bedClock + ' · ' + t.offsetHours + '시간 전');
+    setHtmlIfChanged($('t-dinner-pct'), t.pct + '%');
+    setWidth('t-dinner-bar', t.pct);
+    setRunner('t-dinner-run', t.pct);
+  }
+
+  async function saveSetting(key, value, message) {
+    var p = state.participant;
+    if (!p) return;
+    var settings = Object.assign({}, p.settings || {});
+    settings[key] = value;
+    try {
+      var updated = await store.updateParticipant(p.id, { settings: settings });
+      applyParticipant(updated);
+      render();
+      tickTimers();
+      if (message) toast(message);
+    } catch (e) {
+      toast('저장하지 못했어요: ' + e.message, 'error');
+    }
+  }
+
   async function saveTimerPref(key, value) {
     var p = state.participant;
     if (!p) return;
@@ -536,6 +602,7 @@
       M.fastingState(prefs.lastMeal, now, Program.check.fast24Hours)
     );
     paintSleep(M.sleepState(prefs.wake, now, Program.check.sleepHours));
+    paintDinner(M.dinnerState(prefs.wake, now, M.dinnerMode(state.participant, viewDay())));
   }
 
   async function saveWeeklyMetric(wk, metric, raw) {
@@ -661,16 +728,29 @@
     if (message) toast(message);
   }
 
-  async function demoLogin(role) {
-    var code = role === 'admin' ? CFG.demo.adminCode : CFG.demo.participantCode;
-    var p = await store.findByCode(code);
+  async function demoLogin() {
+    var p = await store.findByCode(CFG.demo.participantCode);
     if (!p) {
       toast('데모 참여자를 찾지 못했어요. 데모 데이터를 초기화해주세요.', 'error');
       return;
     }
-    var session = Auth.signInDemo(role, p.id);
-    await startWith(p, session, role === 'admin' ? '관리자(민정) 체험으로 시작했어요' : p.name + '님으로 시작했어요');
-    if (role === 'admin') go('admin');
+    var session = Auth.signInDemo(p.id);
+    await startWith(p, session, p.name + '님으로 시작했어요');
+  }
+
+  /* 관리자 로그인: 코드가 맞을 때만 관리자 세션을 만든다 (원클릭 체험 버튼 없음) */
+  async function adminLogin(code) {
+    var expected = String(CFG.demo.adminCode || '');
+    if (!expected || String(code || '').trim() !== expected) {
+      toast('관리자 코드가 맞지 않아요', 'error');
+      return;
+    }
+    var p = await store.findByCode(CFG.demo.participantCode);
+    var session = Auth.signInAdmin(p ? p.id : null);
+    await startWith(p || null, session, '관리자로 로그인했어요');
+    state.adminTab = 'participants';
+    go('admin');
+    render();
   }
 
   async function codeLogin(name, code) {
@@ -726,6 +806,11 @@
     var el = e.target.closest ? e.target.closest('[data-act]') : null;
     if (!el) return;
     var act = el.getAttribute('data-act');
+
+    if (ADMIN_ACTS[act] && !isAdminSession()) {
+      toast('관리자 로그인이 필요해요', 'error');
+      return;
+    }
 
     switch (act) {
       case 'close-sheet': closeSheet(); break;
@@ -832,6 +917,12 @@
       case 'water-dec': {
         var e5 = M.getEntry(state.participant, viewDay()) || {};
         await updateEntry({ water: Math.max(0, (e5.water || 0) - 1) });
+        break;
+      }
+      case 'dinner-mode': {
+        var dm = el.getAttribute('data-value');
+        if (dm !== 'shake' && dm !== 'meal') break;
+        await saveSetting('dinnerMode', dm, dm === 'shake' ? '저녁식사 기준을 셰이크(-2시간)로 바꿨어요' : '저녁식사 기준을 무탄·저탄(-4시간)으로 바꿨어요');
         break;
       }
       case 'save-memo': {
@@ -1116,11 +1207,23 @@
     var form = e.target;
     e.preventDefault();
 
+    if (!isAdminSession() && (form.id === 'add-p-form' || form.id === 'promo-form' || form.id === 'feedback-form')) {
+      toast('관리자 로그인이 필요해요', 'error');
+      return;
+    }
+
     if (form.id === 'code-form') {
       var name = form.elements.namedItem('name').value.trim();
       var code = form.elements.namedItem('code').value.trim();
       if (!code) { toast('참여코드를 입력해주세요', 'error'); return; }
       await codeLogin(name, code);
+      return;
+    }
+
+    if (form.id === 'admin-form') {
+      var adminCode = form.elements.namedItem('code').value.trim();
+      if (!adminCode) { toast('관리자 코드를 입력해주세요', 'error'); return; }
+      await adminLogin(adminCode);
       return;
     }
 

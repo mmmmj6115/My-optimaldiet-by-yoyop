@@ -179,7 +179,7 @@ h1, h2, h3, p { margin: 0; }
 .gate-note { color: var(--muted); font-size: 11.5px; text-align: center; line-height: 1.5; max-width: 330px; margin: 0 auto; padding: 0 6px; }
 .gate-demo { margin-top: 8px; padding-top: 16px; border-top: 1px dashed var(--line); }
 .gate-demo-label { display: block; color: var(--muted); font-size: 11.5px; font-weight: 600; margin-bottom: 8px; text-align: center; }
-.gate-demo-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.gate-demo-row { display: grid; grid-template-columns: 1fr; gap: 8px; }
 .gate-demo-row .btn { padding: 8px 6px; font-size: 12.5px; line-height: 1.25; white-space: normal; height: auto; min-height: 42px; }
 .gate-code { margin-top: 14px; border: 1px solid var(--line); border-radius: 14px; background: #fff; padding: 0 14px; }
 .gate-code summary {
@@ -260,6 +260,11 @@ h1, h2, h3, p { margin: 0; }
 }
 .timer-card.fast { background: linear-gradient(165deg, #FFFFFF, #EFFAF4 72%); border-color: #D7EEE2; }
 .timer-card.sleep { background: linear-gradient(165deg, #FFFFFF, #EEF3FB 72%); border-color: #DCE6F3; }
+.timer-card.dinner { background: linear-gradient(165deg, #FFFFFF, #FDF6EC 72%); border-color: #F0E2CA; }
+.timer-card.dinner .tc-label { color: #A8632F; }
+.timer-card.dinner .tc-pill { color: #A8632F; background: #FDF0DF; }
+.dinner-mode { margin-top: 10px; }
+.dinner-mode button { font-size: 11px; padding: 7px 4px; white-space: nowrap; }
 .tc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tc-label { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 800; color: #2C6F58; }
 .tc-label .ic { width: 15px; height: 15px; }
@@ -781,6 +786,15 @@ h1, h2, h3, p { margin: 0; }
 .food-group { margin-top: 12px; }
 .food-group:first-of-type { margin-top: 0; }
 .food-group h3 { font-size: 12px; font-weight: 700; color: var(--ink-2); margin-bottom: 7px; }
+
+/* ---------- D1~3 당질 제한 · 장 해독 ---------- */
+.detox-card .week-chip { color: #fff; background: var(--brand); }
+.detox-grid { display: grid; gap: 8px; }
+.detox-item { background: var(--brand-soft); border-radius: 11px; padding: 9px 11px; }
+.detox-item b { display: block; font-size: 11.5px; font-weight: 800; color: var(--brand); margin-bottom: 3px; }
+.detox-item p { font-size: 12px; color: var(--ink-2); line-height: 1.55; }
+.prot-calc { display: block; margin-top: 4px; font-style: normal; font-weight: 800; font-size: 11.5px; color: var(--brand); }
+.food-bar.detox .food-side.allow .fb-head em { color: var(--brand); }
 .forbid-list { display: grid; gap: 8px; }
 .forbid-item { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; background: #FDF4F1; border-radius: 9px; }
 .forbid-item b { font-size: 11.5px; color: var(--coral); }
@@ -1020,7 +1034,7 @@ h1, h2, h3, p { margin: 0; }
   .detail-metrics { grid-template-columns: repeat(4, 1fr); }
 }
 @media (min-width: 520px) {
-  .timer-grid { grid-template-columns: 1fr 1fr; }
+  .timer-grid { grid-template-columns: repeat(3, 1fr); }
 }
 @media (min-width: 768px) {
   body { background: #E8EDE9; }

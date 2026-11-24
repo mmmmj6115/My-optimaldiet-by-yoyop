@@ -200,7 +200,6 @@
             '<span class="gate-demo-label">체험하기</span>' +
             '<div class="gate-demo-row">' +
               '<button class="btn ghost sm" data-act="demo-login" data-role="participant">데모 참여자 체험</button>' +
-              '<button class="btn ghost sm" data-act="demo-login" data-role="admin">관리자(민정) 체험</button>' +
             '</div>' +
           '</div>' +
           '<details class="gate-code">' +
@@ -211,6 +210,14 @@
               '<button class="btn primary block" type="submit">입장하기</button>' +
             '</form>' +
             '<p class="hint">참여코드는 관리자에게 받은 코드예요. 데모 코드는 1234입니다.</p>' +
+          '</details>' +
+          '<details class="gate-code gate-admin">' +
+            '<summary>관리자 로그인</summary>' +
+            '<form id="admin-form" class="stack" autocomplete="off">' +
+              '<input class="input" name="code" type="password" placeholder="관리자 코드" autocomplete="current-password" maxlength="32">' +
+              '<button class="btn outline block" type="submit">관리자로 로그인</button>' +
+            '</form>' +
+            '<p class="hint">운영자에게 받은 관리자 코드를 입력하면 관리자 탭이 열려요.</p>' +
           '</details>' +
         '</div>' +
         '<p class="gate-foot">' + esc(Program.name) + ' · ' + esc(Program.title) + ' v' + esc(Program.version) + '</p>' +
@@ -225,9 +232,10 @@
       ['today', '오늘', 'today'],
       ['board', '보드', 'grid'],
       ['promos', '공구·추천', 'tag'],
-      ['guide', '가이드', 'book'],
-      ['admin', '관리자', 'users']
+      ['guide', '가이드', 'book']
     ];
+    /* 관리자 탭은 관리자 코드로 로그인한 세션에서만 만든다 */
+    if (data.role === 'admin') items.push(['admin', '관리자', 'users']);
     return items.map(function (it) {
       var on = it[0] === route;
       return '<button class="tab ' + (on ? 'on' : '') + '" data-act="nav" data-route="' + it[0] + '" aria-current="' + (on ? 'page' : 'false') + '">' + icon(it[2]) + '<span>' + it[1] + '</span></button>';
@@ -401,6 +409,36 @@
     '</article>';
   }
 
+  function timerCardDinner(d) {
+    var t = d.dinner;
+    if (!t) return '';
+    var cap = t.done ? '마감 시각이 지났어요' : '저녁 식사는 ' + t.deadlineClock + '까지';
+    var val = t.done
+      ? '<span class="big-num">마감 ' + esc(t.overText) + ' 지났어요</span>'
+      : '<span class="big-num">' + esc(t.leftText) + '</span> <em>남았어요</em>';
+    var note = t.done
+      ? '취침 ' + t.bedClock + ' ' + t.offsetHours + '시간 전(' + t.deadlineClock + ')을 넘었어요. 다음엔 조금 더 일찍 먹어봐요.'
+      : t.label + '을 취침 ' + t.offsetHours + '시간 전(' + t.deadlineClock + ')까지 끝내요.';
+    var modes = ['shake', 'meal'].map(function (k) {
+      var m = M.dinnerModes[k];
+      var on = t.mode === k;
+      return '<button class="' + (on ? 'on' : '') + '" data-act="dinner-mode" data-value="' + k + '" aria-pressed="' + on + '">' +
+        m.emoji + ' ' + esc(m.short) + ' (' + esc(m.tag) + ')</button>';
+    }).join('');
+    return '<article class="timer-card dinner">' +
+      '<div class="tc-head">' +
+        '<span class="tc-label">' + icon('clock') + '마지막 저녁식사</span>' +
+        '<span class="tc-pill" id="t-dinner-state">' + esc(t.emoji + ' ' + t.tag) + '</span>' +
+      '</div>' +
+      '<p class="tc-cap" id="t-dinner-cap">' + esc(cap) + '</p>' +
+      '<p class="tc-big" id="t-dinner-value">' + val + '</p>' +
+      gaugeBlock(t.pct, { id: 't-dinner-bar', runId: 't-dinner-run', cls: 'amber' }) +
+      '<div class="tc-meta"><span id="t-dinner-meta">취침 ' + esc(t.bedClock) + ' · ' + t.offsetHours + '시간 전</span><span id="t-dinner-pct">' + t.pct + '%</span></div>' +
+      '<p class="tc-note" id="t-dinner-note">' + esc(note) + '</p>' +
+      '<div class="segmented dinner-mode" role="tablist">' + modes + '</div>' +
+    '</article>';
+  }
+
   function timerCardSleep(d) {
     var s = d.sleep;
     if (!s) return '';
@@ -436,20 +474,40 @@
     '</section>';
   }
 
+  function isDetoxDay(day) {
+    return !!(Program.detox && Program.detox.days.indexOf(Number(day)) >= 0);
+  }
+
+  /* Day에 해당하는 기간별 안내 (D1~3 · D4~7 · 2~4주차) */
+  function periodFor(day) {
+    var d = Number(day);
+    var list = [Program.detox, Program.w1Plan, Program.w2Plan, Program.w3Plan, Program.w4Plan];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && list[i].days.indexOf(d) >= 0) return list[i];
+    }
+    return null;
+  }
+
   function foodBar(d) {
     var w = Program.weeks[d.week - 1] || {};
-    var allow = (w.foodChips || []).slice(0, 8);
-    var avoid = Program.forbidden;
+    var detox = isDetoxDay(d.day);
+    var period = detox ? null : periodFor(d.day);
+    var allow = detox ? Program.detox.chips : (period && period.chips ? period.chips : (w.foodChips || []).slice(0, 8));
+    var avoid = detox
+      ? Program.detox.forbiddenChips
+      : (period && period.forbiddenChips
+        ? period.forbiddenChips
+        : Program.forbidden.map(function (g) { return { e: g.emoji, t: g.chip }; }));
     if (!allow.length && !avoid.length) return '';
-    return '<section class="food-bar">' +
+    return '<section class="food-bar' + (detox ? ' detox' : '') + '">' +
       '<div class="food-grid">' +
         '<div class="food-side allow">' +
-          '<div class="fb-head">' + icon('leaf') + '<b>허용식품</b><em>' + esc(w.title || '') + '</em></div>' +
+          '<div class="fb-head">' + icon('leaf') + '<b>허용식품</b><em>' + esc(detox ? 'D1~3 당질 제한' : (period ? period.badge : (w.title || ''))) + '</em></div>' +
           '<div class="fb-chips">' + allow.map(function (c) { return foodChipHTML(c.e, c.t, 'ok'); }).join('') + '</div>' +
         '</div>' +
         '<div class="food-side avoid">' +
-          '<div class="fb-head">' + icon('ban') + '<b>금기식품</b><em>전 주차</em></div>' +
-          '<div class="fb-chips">' + avoid.map(function (g) { return foodChipHTML(g.emoji, g.chip, 'no'); }).join('') + '</div>' +
+          '<div class="fb-head">' + icon('ban') + '<b>금기식품</b><em>' + esc(detox ? 'D1~3 기준' : (period && period.forbiddenChips ? period.badge + ' 기준' : '전 주차')) + '</em></div>' +
+          '<div class="fb-chips">' + avoid.map(function (g) { return foodChipHTML(g.e, g.t, 'no'); }).join('') + '</div>' +
         '</div>' +
       '</div>' +
       '<button class="food-more" data-act="guide-week-here" data-week="' + d.week + '">가이드에서 허용식품 · 금기식 전체 보기 →</button>' +
@@ -540,15 +598,15 @@
       '<button class="icon-btn" data-act="prev-day" aria-label="이전 날"' + (d.day <= 1 ? ' disabled' : '') + '>' + icon('back') + '</button>' +
       '<div class="daynav-center">' +
         '<strong>Day ' + d.day + '</strong>' +
-        '<span>' + esc(M.fmtLong(d.date)) + (fast ? ' · 단식일' : '') + '</span>' +
+        '<span>' + esc(M.fmtLong(d.date)) + (fast ? ' · 단식일' : (isDetoxDay(d.day) ? ' · D1~3 당질 제한' : '')) + '</span>' +
       '</div>' +
       '<button class="icon-btn" data-act="next-day" aria-label="다음 날"' + (d.day >= 28 ? ' disabled' : '') + '>' + icon('chevron') + '</button>' +
       (!d.isToday ? '<button class="daynav-today" data-act="go-today">오늘로</button>' : '') +
     '</div>';
 
     var timers = d.isToday
-      ? '<div class="timer-grid">' + timerCardFasting(d) + timerCardSleep(d) + '</div>'
-      : '<p class="note-line">공복·수면 타이머는 오늘 화면에서 실시간으로 보여요.</p>';
+      ? '<div class="timer-grid">' + timerCardFasting(d) + timerCardDinner(d) + timerCardSleep(d) + '</div>'
+      : '<p class="note-line">공복·저녁식사·수면 타이머는 오늘 화면에서 실시간으로 보여요.</p>';
 
     var quote = quoteBanner(d.quote, d.day);
     var foods = foodBar(d);
@@ -574,10 +632,16 @@
         '<div class="subhead"><h2>식단 · 영양</h2><button class="link-btn" data-act="edit-plan">계획 수정</button></div>' +
         (fast ? '<p class="fast-note">' + icon('cup') + '<span>24시간 단식일이에요. 물·허브티만 마시고 영양제는 쉬어가요.</span></p>' : '') +
         '<div class="meal-list">' + Program.meals.map(function (m) { return mealRow(plan, m, entry); }).join('') + '</div>' +
+        (function () {
+          var pd = periodFor(d.day);
+          return pd && pd.mealNote ? '<p class="note-line">' + esc(pd.mealNote) + '</p>' : '';
+        })() +
         '<div class="sub-list">' +
           ['morning', 'evening'].map(function (k) {
             var on = !!(entry.supplements && entry.supplements[k]);
             var label = k === 'morning' ? '아침 영양제' : '저녁 영양제';
+            var supHint = (Program.w1Plan && Program.w1Plan.days.indexOf(Number(d.day)) >= 0)
+              ? Program.w1Plan.supplementShort[k] : '';
             if (fast) {
               return '<div class="switch-row compact is-na">' +
                 '<span class="switch-text"><b>' + label + '</b><small>단식일엔 쉬어가요</small></span>' +
@@ -585,7 +649,7 @@
                 '</div>';
             }
             return '<button class="switch-row compact" data-act="toggle-supp" data-supp="' + k + '" role="switch" aria-checked="' + on + '">' +
-              '<span class="switch-text"><b>' + label + '</b></span>' +
+              '<span class="switch-text"><b>' + label + '</b>' + (supHint ? '<small>' + esc(supHint) + '</small>' : '') + '</span>' +
               '<span class="tick ' + (on ? 'on' : '') + '" aria-hidden="true">' + (on ? icon('check') : '') + '</span>' +
               '</button>';
           }).join('') +
@@ -930,34 +994,92 @@
   }
 
   /* ---------------- 가이드 ---------------- */
-  function guide(d) {
-    var w = Program.weeks[d.week - 1];
-    var seg = segmented('guide-week', Program.weeks.map(function (x) { return [String(x.week), x.title]; }), String(d.week));
+  function periodCard(p, chipsTitle, chipsList) {
+    if (!p) return '';
+    var blocks = p.blocks.map(function (b) {
+      return '<div class="detox-item"><b>' + esc(b.title) + '</b><p>' + esc(b.text) + '</p></div>';
+    }).join('');
+    var chips = chipsList || p.chips;
+    var chipHtml = (chips && chips.length)
+      ? '<div class="food-group"><h3>' + esc(chipsTitle || '허용식품') + '</h3><div class="chips-row wrap">' +
+          chips.map(function (c) { return foodChipHTML(c.e, c.t, 'ok'); }).join('') +
+        '</div></div>'
+      : '';
+    return '<section class="card guide-card detox-card">' +
+      '<div class="card-head"><span class="week-chip">' + esc(p.badge) + '</span><h2>' + esc(p.title) + '</h2></div>' +
+      '<p class="guide-summary">' + esc(p.summary) + '</p>' +
+      '<div class="detox-grid">' + blocks + '</div>' +
+      chipHtml +
+      (p.note ? '<p class="note-line">' + esc(p.note) + '</p>' : '') +
+    '</section>';
+  }
 
+  function weekCards(week) {
+    if (week === 1) {
+      return periodCard(Program.detox, 'D1~3 허용식품') +
+        periodCard(Program.w1Plan, 'D4~7 추가 허용식품', Program.w1Plan.additions);
+    }
+    if (week === 2) return periodCard(Program.w2Plan, '1주차 대비 추가 허용', Program.w2Plan.additions);
+    if (week === 3) return periodCard(Program.w3Plan, '2주차 대비 추가 허용', Program.w3Plan.additions);
+    if (week === 4) return periodCard(Program.w4Plan, '3주차 대비 추가 허용', Program.w4Plan.additions);
+    return '';
+  }
+
+  function proteinCard(weight) {
+    var p = Program.protein;
+    if (!p) return '';
+    var shake = p.shake.map(function (s) {
+      return '<div class="detox-item"><b>' + esc(s.title) + '</b><p>' + esc(s.text) + '</p></div>';
+    }).join('');
+    function g(v) { return Math.round(v) + 'g'; }
+    var intake = p.intake.map(function (s) {
+      var calc = '';
+      if (weight) {
+        var lo = Array.isArray(s.perKg) ? s.perKg[0] : s.perKg;
+        var hi = Array.isArray(s.perKg) ? s.perKg[1] : s.perKg;
+        calc = g(weight * lo) + (hi !== lo ? '~' + g(weight * hi) : '');
+      }
+      return '<div class="detox-item"><b>' + esc(s.title) + '</b><p>' + esc(s.text) +
+        (calc ? '<em class="prot-calc">현재 체중 기준 ' + calc + '</em>' : '') + '</p></div>';
+    }).join('');
+    return '<section class="card guide-card">' +
+      '<div class="card-head"><h2>단백질셰이크 선택 기준</h2><span class="hint">' +
+        (weight ? '현재 체중 ' + weight.toFixed(1) + 'kg 기준' : '체중을 기록하면 권장량을 계산해드려요') + '</span></div>' +
+      '<div class="detox-grid">' + shake + '</div>' +
+      '<div class="food-group"><h3>하루 단백질 섭취 권장량</h3><div class="detox-grid">' + intake + '</div></div>' +
+      '<p class="note-line">감량기에는 1.2~1.6g/kg를 기본으로, 운동량이 많으면 최대 2g/kg까지예요.</p>' +
+    '</section>';
+  }
+
+  function weekBlock(week) {
+    var w = Program.weeks[week - 1];
+    if (!w) return '';
     var fastLine = w.fastingDays && w.fastingDays.length
       ? '<div class="fast-line">' + icon('cup') + '<span>이 주의 24시간 단식: <b>' + w.fastingDays.map(function (x) { return 'Day ' + x; }).join(' · ') + '</b></span></div>'
       : '';
+    var chips = (w.foodChips && w.foodChips.length)
+      ? '<div class="food-group"><h3>이번 주 허용식품</h3><div class="chips-row wrap">' +
+          w.foodChips.map(function (c) { return foodChipHTML(c.e, c.t, 'ok'); }).join('') +
+        '</div></div>'
+      : '';
+    return '<section class="card guide-card">' +
+        '<div class="card-head"><span class="week-chip">' + esc(w.title) + '</span><h2>' + esc(w.subtitle) + '</h2></div>' +
+        '<p class="guide-summary">' + esc(w.summary) + '</p>' +
+        fastLine +
+        '<ul class="bullets">' + w.cautions.map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('') + '</ul>' +
+        chips +
+      '</section>' +
+      weekCards(week) +
+      (w.tip ? '<div class="tip-box">' + icon('sparkle') + '<div><b>이 주의 팁</b><p>' + esc(w.tip) + '</p></div></div>' : '');
+  }
 
-    var cautions = '<section class="card guide-card">' +
-      '<div class="card-head"><span class="week-chip">' + esc(w.title) + '</span><h2>' + esc(w.subtitle) + '</h2></div>' +
-      '<p class="guide-summary">' + esc(w.summary) + '</p>' +
-      fastLine +
-      '<ul class="bullets">' + w.cautions.map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('') + '</ul>' +
-    '</section>';
-
-    var foods = '<section class="card guide-card">' +
-      '<div class="card-head"><h2>허용식품</h2><span class="hint">' + esc(w.title) + ' 기준</span></div>' +
-      ((w.foodChips && w.foodChips.length)
-        ? '<div class="food-group"><h3>이번 주 한눈에</h3><div class="chips-row wrap">' +
-            w.foodChips.map(function (c) { return foodChipHTML(c.e, c.t, 'ok'); }).join('') +
-          '</div></div>'
-        : '') +
-      w.foodGroups.map(function (g) {
-        return '<div class="food-group"><h3>' + esc(g.title) + '</h3><div class="chips-row wrap">' +
-          g.items.map(function (it) { return foodChipHTML(foodIconOf(it), it, 'line'); }).join('') +
-        '</div></div>';
-      }).join('') +
-      (w.foodNote ? '<p class="note-line">' + esc(w.foodNote) + '</p>' : '') +
+  function guide(d) {
+    /* 공통 기본규칙을 맨 위에 모으고, 그 아래 D1~3 → D4~7 → 2·3·4주 순서로 */
+    var rules = '<section class="card guide-card">' +
+      '<div class="card-head"><span class="week-chip">공통</span><h2>기본 규칙</h2></div>' +
+      '<div class="rule-list">' + Program.rules.map(function (r) {
+        return '<div class="rule-item"><b>' + esc(r.title) + '</b><span>' + esc(r.text) + '</span></div>';
+      }).join('') + '</div>' +
     '</section>';
 
     var forbidden = '<section class="card guide-card danger">' +
@@ -970,23 +1092,21 @@
       '<p class="note-line">한 입이라도 먹으면 몸은 먹은 음식을 모두 지방으로 쌓으려 해요. 애매하면 먹지 않는 쪽을 골라요.</p>' +
     '</section>';
 
+    var protein = proteinCard(d.weight ? Number(d.weight) : null);
+
+    var sections = [1, 2, 3, 4].map(weekBlock).join('');
+
     var eating = '<section class="card guide-card">' +
       '<div class="card-head"><h2>외식 추천 메뉴</h2></div>' +
       '<div class="chips-row wrap">' + Program.eatingOut.recommend.map(function (it) { return '<span class="food-chip good">' + esc(it) + '</span>'; }).join('') + '</div>' +
       '<div class="avoid-line"><span class="hint">피하기</span><div class="chips-row wrap">' + Program.eatingOut.avoid.map(function (it) { return '<span class="food-chip bad">' + esc(it) + '</span>'; }).join('') + '</div></div>' +
     '</section>';
 
-    var rules = '<section class="card guide-card">' +
-      '<div class="card-head"><h2>기본 규칙</h2></div>' +
-      '<div class="rule-list">' + Program.rules.map(function (r) {
-        return '<div class="rule-item"><b>' + esc(r.title) + '</b><span>' + esc(r.text) + '</span></div>';
-      }).join('') + '</div>' +
-    '</section>';
-
-    var tip = w.tip ? '<div class="tip-box">' + icon('sparkle') + '<div><b>이 주의 팁</b><p>' + esc(w.tip) + '</p></div></div>' : '';
-
-    return pageHead('가이드', '주차별 허용식품 · 주의사항 · 금기식 · 외식 메뉴') + seg + cautions + tip + foods + forbidden + eating + rules +
-      '<p class="disclaimer">' + esc(Program.disclaimer) + '</p>';
+    return pageHead('가이드', '기본 규칙 → D1~3 · D4~7 → 2·3·4주')
+      + rules + forbidden + protein
+      + sections
+      + eating
+      + '<p class="disclaimer">' + esc(Program.disclaimer) + '</p>';
   }
 
   /* ---------------- 관리자 ---------------- */
@@ -1291,7 +1411,7 @@
       sheetHead('참여자 추가', '4자리 참여코드가 자동 생성돼요') +
       '<form id="add-p-form" class="stack">' +
         '<label class="field"><span>이름</span><input class="input" name="name" placeholder="이름" required></label>' +
-        '<label class="field"><span>닉네임 <em class="hint">(비우면 이름으로 표시)</em></span><input class="input" name="nickname" maxlength="12" placeholder="예: 민정"></label>' +
+        '<label class="field"><span>닉네임 <em class="hint">(비우면 이름으로 표시)</em></span><input class="input" name="nickname" maxlength="12" placeholder="예: 유니"></label>' +
         '<label class="field"><span>시작일</span><input class="input" type="date" name="startDate" value="' + M.todayStr() + '" required></label>' +
         '<label class="field"><span>참여코드 <em class="hint">(비우면 자동)</em></span><input class="input" name="code" inputmode="numeric" maxlength="8" placeholder="예: 5821"></label>' +
         '<button class="btn primary block" type="submit">참여자 만들기</button>' +
@@ -1302,7 +1422,8 @@
 
   function profileSheet(d) {
     var p = d.participant;
-    var provider = d.provider === 'supabase' || d.provider === 'kakao' ? '카카오 로그인' : (d.provider === 'code' ? '참여코드 입장' : '데모 체험');
+    var provider = d.provider === 'supabase' || d.provider === 'kakao' ? '카카오 로그인'
+      : (d.provider === 'code' ? '참여코드 입장' : (d.provider === 'admin' || d.role === 'admin' ? '관리자 코드' : '데모 체험'));
     return sheetWrap(
       sheetHead('내 정보') +
       '<div class="profile-head"><span class="avatar lg">' + esc(String(p.nickname || p.name || '?').slice(0, 1)) + '</span>' +
@@ -1315,7 +1436,7 @@
       '</div>' +
       '<form id="profile-form" class="nick-form" data-id="' + esc(p.id || '') + '">' +
         '<label class="field"><span>닉네임 <em class="hint">(오늘 화면에 표시)</em></span>' +
-          '<input class="input" name="nickname" maxlength="12" placeholder="예: 민정" value="' + esc(p.nickname || '') + '"></label>' +
+          '<input class="input" name="nickname" maxlength="12" placeholder="예: 유니" value="' + esc(p.nickname || '') + '"></label>' +
         '<button class="btn ghost sm" type="submit">닉네임 저장</button>' +
       '</form>' +
       (d.role === 'admin' ? '<button class="btn outline block" data-act="nav" data-route="admin">관리자 대시보드 열기</button>' : '') +
@@ -1346,9 +1467,8 @@
         '<span class="kakao-circle">' + '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3.2c-4.9 0-8.8 3-8.8 6.7 0 2.4 1.6 4.5 4 5.8l-.9 3.2c-.1.3.2.5.4.3l3.8-2.5c.5.1 1 .1 1.5.1 4.9 0 8.8-3 8.8-6.9S16.9 3.2 12 3.2z"/></svg>' + '</span>' +
         '<p>배포하면 이 버튼이 카카오 계정과 연결됩니다.<br>(Supabase Auth · Kakao OAuth)<br>지금은 아래 체험 계정으로 시작해요.</p>' +
       '</div>' +
-      '<button class="btn primary block" data-act="demo-login" data-role="participant">데모 참여자(박민정)로 시작</button>' +
-      '<button class="btn outline block" data-act="demo-login" data-role="admin">관리자(민정)로 시작</button>' +
-      '<p class="hint center">관리자는 참여자 관리와 공구·광고 등록을 할 수 있어요.</p>'
+      '<button class="btn primary block" data-act="demo-login" data-role="participant">데모 참여자(김유니)로 시작</button>' +
+      '<p class="hint center">관리자 화면은 로그인 화면의 ‘관리자 로그인’에서 코드로 들어갈 수 있어요.</p>'
     );
   }
 

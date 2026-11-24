@@ -7,7 +7,7 @@
 
   var CONFIG = {
     appName: '마이옵티멀다이어트 28일 루틴',
-    version: '1.2.0',
+    version: '1.3.0',
 
     /* 'demo' | 'supabase' | 'kakao'
      *  - demo    : 서버·키 없이 로컬 체험 (기본값)
@@ -29,8 +29,8 @@
 
     /* 데모 체험 계정: 참여코드로 연결 */
     demo: {
-      participantCode: '1234',   // 데모 참여자 (박민정)
-      adminCode: '1234'          // 관리자(민정) 체험
+      participantCode: '1234',   // 데모 참여자 (가상 인물 김유니, Day 1부터 시작)
+      adminCode: 'yoyop2828'     // 관리자 전용 코드 — 로그인 화면의 '관리자 로그인'에서만 입력
     },
 
     /* 배포 후 실제 데이터 소스로 바꿀 때 사용 (README 참고) */

@@ -518,6 +518,54 @@
     };
   }
 
+  /* ---------- 마지막 저녁식사 타이머 ---------- */
+  var DINNER_MODES = {
+    shake: { key: 'shake', offset: 2, label: '단백질쉐이크 저녁', short: '셰이크', tag: '-2h', emoji: '🥤' },
+    meal: { key: 'meal', offset: 4, label: '무탄·저탄 일반식', short: '무탄·저탄', tag: '-4h', emoji: '🥗' }
+  };
+
+  /* 1주차(D1~7)는 셰이크, 2~4주차는 일반식이 기본값 */
+  function dinnerDefaultMode(day) {
+    var d = Number(day) || 1;
+    if (Program.w1Plan && Program.w1Plan.days.indexOf(d) >= 0) return 'shake';
+    if (Program.detox && Program.detox.days.indexOf(d) >= 0) return 'shake';
+    return 'meal';
+  }
+
+  function dinnerMode(participant, day) {
+    var s = (participant && participant.settings) || {};
+    if (s.dinnerMode === 'shake' || s.dinnerMode === 'meal') return s.dinnerMode;
+    return dinnerDefaultMode(day);
+  }
+
+  /* 취침 예정(bed) − 모드별 시간 안에 저녁 식사를 끝내는 카운트다운 */
+  function dinnerState(wake, now, mode) {
+    var m = DINNER_MODES[mode] ? mode : 'shake';
+    var def = DINNER_MODES[m];
+    var nowD = now ? new Date(now.getTime ? now.getTime() : now) : new Date();
+    var s = sleepState(wake, nowD, Program.check.sleepHours);
+    if (!s) return null;
+    var deadline = new Date(s.bedAt.getTime() - def.offset * 3600000);
+    var leftMin = Math.floor((deadline.getTime() - nowD.getTime()) / 60000);
+    return {
+      mode: m,
+      emoji: def.emoji,
+      label: def.label,
+      short: def.short,
+      tag: def.tag,
+      offsetHours: def.offset,
+      bedClock: s.bedClock,
+      wake: s.wake,
+      deadlineAt: deadline,
+      deadlineClock: clockOf(deadline),
+      leftMin: leftMin,
+      done: leftMin <= 0,
+      leftText: minutesText(Math.max(leftMin, 0)),
+      overText: leftMin < 0 ? minutesText(-leftMin) : '',
+      pct: Math.max(0, Math.min(100, Math.round((1 - leftMin / (24 * 60)) * 100)))
+    };
+  }
+
   /* ---------- 데일리 퀘스트 ---------- */
   var QUEST_DEFS = [
     { key: 'breakfast', meal: 'breakfast', label: '아침', icon: 'sun' },
@@ -529,15 +577,25 @@
     { key: 'sleep', label: '수면', icon: 'bed' }
   ];
 
-  function quests(plan, entry) {
+  function quests(plan, entry, day) {
     var e = entry || {};
+    var d = Number(day);
+    var detoxDay = !!(Program.detox && Program.detox.days.indexOf(d) >= 0);
     var list = QUEST_DEFS.map(function (q) {
       if (q.meal) {
         var t = Program.types[plan[q.meal]] || Program.types.SHAKE;
         var na = plan[q.meal] === 'FAST';
+        var idx = Program.meals.indexOf(q.meal);
+        var hint = null;
+        [Program.w1Plan, Program.w2Plan, Program.w3Plan, Program.w4Plan].forEach(function (p) {
+          if (!hint && p && p.days.indexOf(d) >= 0 && p.meals && p.meals[q.meal]) hint = p.meals[q.meal];
+        });
         return {
-          key: q.key, label: q.label, icon: q.icon, tone: t.tone, na: na,
-          sub: na ? '단식 · 물만' : t.short,
+          key: q.key,
+          label: detoxDay && idx >= 0 ? Program.detox.mealLabels[idx] : q.label,
+          icon: q.icon, tone: t.tone, na: na,
+          sub: na ? '단식 · 물만'
+            : (detoxDay ? Program.detox.mealSub : (hint && hint.sub ? hint.sub : t.short)),
           done: na ? true : !!(e.meals && e.meals[q.meal])
         };
       }
@@ -742,6 +800,10 @@
     timerPrefs: timerPrefs,
     fastingState: fastingState,
     sleepState: sleepState,
+    dinnerState: dinnerState,
+    dinnerMode: dinnerMode,
+    dinnerDefaultMode: dinnerDefaultMode,
+    dinnerModes: DINNER_MODES,
     quests: quests,
     quoteFor: quoteFor,
     photoKeys: PHOTO_KEYS,

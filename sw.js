@@ -1,5 +1,5 @@
 /* 오프라인 캐시 — https 배포 시에만 등록됩니다(file:// 에서는 등록 안 함) */
-var CACHE = 'my-optimal-diet-v3';
+var CACHE = 'my-optimal-diet-v4';
 var ASSETS = [
   './index.html',
   './css/app.css',
