@@ -1928,13 +1928,15 @@
       case 'reset-demo':
         confirmAction('reset-demo', {
           title: '데모 데이터를 초기화할까요?',
-          message: '지금까지 입력한 기록과 추천템이 모두 지워지고 처음 상태로 돌아가요.',
+          message: '가상 참여자(김유니·김서연 등)와 추천템이 처음 상태로 돌아가요. 내 기록(개인)은 지우지 않고 그대로 남아요.',
           confirmLabel: '초기화',
           tone: 'danger',
           icon: 'trash',
           onConfirm: async function () {
+            /* 개인 기록은 데모 초기화에서 지우지 않는다 */
+            var mine = (state.participants || []).filter(function (p) { return p && p.personal; });
             await store.resetDemo({
-              participants: global.App.Seed.build(today()),
+              participants: global.App.Seed.build(today()).concat(mine),
               promos: global.App.Seed.promos(today())
             });
             await reloadAll();
