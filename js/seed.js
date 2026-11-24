@@ -87,10 +87,13 @@
       cycleLength: 28,
       periodDays: 5
     });
-    var w2 = 61.2, m2 = 21.4, f2 = 24.1, v2 = 8;
+    var w2 = 61.4, m2 = 21.9, f2 = 24.2, v2 = 8;
     for (var d = 1; d <= 16; d++) {
       w2 = M.round1(w2 - 0.18);
-      m2 = M.round1(m2 - 0.01);
+      /* 1~3일차 단식으로 골격근량이 빠지고, 2주차부터 회복되는 현실적인 흐름 */
+      if (d <= 3) m2 = M.round1(m2 - 0.13);
+      else if (d <= 7) m2 = M.round1(m2 - 0.02);
+      else m2 = M.round1(m2 + 0.025);
       f2 = M.round1(f2 - 0.11);
       if (d === 6 || d === 13) v2 = v2 - 1;
       p2.entries[String(d)] = mkEntry(p2, d, {
