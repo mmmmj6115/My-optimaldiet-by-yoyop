@@ -517,7 +517,7 @@
         kind: 'breakfast', checked: !!s.mealChecked, clock: s.fastEndClock, label: '단식 종료 시각',
         hint: '단식일이라 지금 시각을 단식 종료로 저장해요'
       }) +
-      '<label class="time-row"><span>전날 마지막 식사</span><input type="time" data-field="fastPrevMeal" value="' + esc(s.prevMeal) + '" aria-label="전날 마지막 식사 시각"></label>' +
+      '<label class="time-row"><span>' + (s.source === 'start' ? '단식 시작 시각' : '전날 마지막 식사') + '</span><input type="time" data-field="fastPrevMeal" value="' + esc(s.prevMeal) + '" aria-label="전날 마지막 식사 시각"></label>' +
       '<p class="tc-src" id="t-fast-src">' + esc(srcText) + '</p>' +
       '<button class="btn ghost sm block fast-move-btn" data-act="open-fast-move" data-day="' + s.day + '">단식일 바꾸기</button>' +
     '</article>';
