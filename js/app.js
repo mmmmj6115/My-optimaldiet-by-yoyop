@@ -283,7 +283,7 @@
       checkedDays: M.checkedDays(p),
       prevMetrics: prev,
       deltas: deltas,
-      body: M.latestValues(p, day, ['weight', 'fat', 'visceral']),
+      body: M.latestValues(p, day, ['weight', 'muscle', 'fat', 'visceral']),
       prefs: prefs,
       fasting: M.fastingDayState(p, day, now, Program.check.fastingHours),
       fast24: M.fast24State(p, day, now, Program.check.fast24Hours),
@@ -297,7 +297,6 @@
       foldOpen: state.foldOpen,
       questTimes: M.questTimes(p),
       quests: M.quests(plan, entry, day),
-      promo: M.featuredPromo(activePromos()),
       feedback: (p.feedback || []).slice(-3)
     };
   }
@@ -385,6 +384,18 @@
   function closeSheet() {
     state.sheet = null;
     renderSheet();
+  }
+
+  /* 추천템 시트: 분류(공구/쿠팡/광고)에 따라 일정·하위 카테고리 입력란을 보인다 */
+  function syncPromoSheetFields(type) {
+    var form = global.document.getElementById('promo-form');
+    if (!form) return;
+    var t = form.querySelector ? form.querySelector('#promo-type-sel') : null;
+    var v = type || (t && t.value) || 'groupbuy';
+    var list = form.querySelectorAll ? form.querySelectorAll('[data-promo-schedule]') : [];
+    for (var i = 0; i < list.length; i++) list[i].hidden = v !== 'groupbuy';
+    var sub = form.querySelectorAll ? form.querySelectorAll('[data-promo-subcat]') : [];
+    for (var j = 0; j < sub.length; j++) sub[j].hidden = v !== 'coupang';
   }
 
   function renderSheet() {
@@ -1670,7 +1681,7 @@
       case 'reset-demo':
         confirmAction('reset-demo', {
           title: '데모 데이터를 초기화할까요?',
-          message: '지금까지 입력한 기록과 공구·광고가 모두 지워지고 처음 상태로 돌아가요.',
+          message: '지금까지 입력한 기록과 추천템이 모두 지워지고 처음 상태로 돌아가요.',
           confirmLabel: '초기화',
           tone: 'danger',
           icon: 'trash',
@@ -1778,6 +1789,11 @@
 
     if (el.matches && el.matches('[data-wk]')) {
       await saveWeeklyMetric(el.getAttribute('data-wk'), el.getAttribute('data-metric'), el.value);
+      return;
+    }
+
+    if (el.id === 'promo-type-sel') {
+      syncPromoSheetFields(el.value);
       return;
     }
 
@@ -1893,15 +1909,16 @@
       var f = form.elements;
       var payload = {
         type: f.namedItem('type').value,
-        category: f.namedItem('category').value,
+        category: f.namedItem('category') ? f.namedItem('category').value : 'etc',
+        startsAt: f.namedItem('startsAt') ? String(f.namedItem('startsAt').value || '') : '',
+        endsAt: f.namedItem('endsAt') ? String(f.namedItem('endsAt').value || '') : '',
         title: f.namedItem('title').value.trim(),
         memo: f.namedItem('memo').value.trim(),
         benefit: f.namedItem('benefit').value.trim(),
         link: f.namedItem('link').value.trim(),
         imageUrl: f.namedItem('imageUrl').value.trim(),
         disclosure: f.namedItem('disclosure').checked,
-        active: f.namedItem('active').checked,
-        featured: f.namedItem('featured').checked
+        active: f.namedItem('active').checked
       };
       if (!payload.title) { toast('제품명을 입력해주세요', 'error'); return; }
       if (!M.isValidLink(payload.link)) { toast('링크는 http:// 또는 https://로 시작해야 해요', 'error'); return; }
@@ -1911,7 +1928,7 @@
       try {
         if (isNew) {
           await store.createPromo(payload);
-          toast('공구·광고를 등록했어요');
+          toast('추천템을 등록했어요');
         } else {
           await store.updatePromo(editId, payload);
           toast('수정했어요');

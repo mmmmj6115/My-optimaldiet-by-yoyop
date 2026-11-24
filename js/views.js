@@ -263,7 +263,7 @@
       ['today', '오늘', 'today'],
       ['board', '보드', 'grid'],
       ['body', '인바디', 'chart'],
-      ['promos', '공구', 'tag']
+      ['promos', '추천템', 'tag']
     ];
     /* 관리자 탭은 관리자 코드로 로그인한 세션에서만 만든다 */
     if (data.role === 'admin') items.push(['admin', '관리자', 'users']);
@@ -284,17 +284,6 @@
 
   function coupangDisclosureHTML(cls) {
     return '<p class="disclosure coupang-disclosure' + (cls ? ' ' + cls : '') + '">' + esc(Program.promos.coupangDisclosure) + '</p>';
-  }
-
-  function sponsorSlot(promo) {
-    if (!promo) return '';
-    var t = M.promoType(promo);
-    return '<button class="sponsor-slot" data-act="nav" data-route="promos">' +
-      '<span class="sponsor-badge tone-' + t.tone + '">' + esc(t.badge) + '</span>' +
-      '<span class="sponsor-text"><b>' + esc(promo.title) + '</b><span>' + esc(promo.memo || t.label) + '</span></span>' +
-      icon('chevron', 'sponsor-arrow') +
-      '</button>' +
-      (isCoupangPromo(promo) ? coupangDisclosureHTML('slot-disclosure') : '');
   }
 
   function metricField(key, label, entry, delta, prevValue, unit, step) {
@@ -397,7 +386,7 @@
     var sub = [];
     if (nickname !== p.name) sub.push(p.name);
     sub.push((week.title || '') + ' · ' + M.fmtLong(d.date) + (d.isToday ? ' · 오늘' : ''));
-    var bd = body.weight || body.fat || body.visceral;
+    var bd = body.weight || body.muscle || body.fat || body.visceral;
     var stamp = bd && bd.date ? ' · ' + M.fmtShort(bd.date) + ' 기록' : '';
 
     return '<section class="hero">' +
@@ -412,6 +401,7 @@
       '</div>' +
       '<div class="hero-stats">' +
         stat('몸무게', 'weight', 'kg') +
+        stat('골격근량', 'muscle', 'kg') +
         stat('체지방량', 'fat', 'kg') +
         stat('내장지방', 'visceral', '레벨') +
       '</div>' +
@@ -639,6 +629,38 @@
     '</section>';
   }
 
+  /* 주차별 조언 · 분기 규칙 — 오늘 화면과 보드가 같은 데이터를 쓴다 */
+  function adviceFor(day) {
+    var list = Program.advice || [];
+    var d = Number(day);
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].days && list[i].days.indexOf(d) >= 0) return list[i];
+    }
+    return list[0] || null;
+  }
+
+  function adviceCard(a, opts) {
+    if (!a) return '';
+    var o = opts || {};
+    var isBranch = !!(a.branchDays && a.branchDays.indexOf(Number(o.day)) >= 0);
+    return '<section class="advice-card' + (o.cls ? ' ' + o.cls : '') + '"' + (o.id ? ' id="' + o.id + '"' : '') + ' data-advice="' + esc(a.key) + '">' +
+      '<div class="advice-head"><span class="advice-badge">' + esc(a.badge) + '</span>' +
+        '<b>' + esc(a.title) + '</b>' +
+        (isBranch ? '<span class="advice-now">오늘 분기일</span>' : '') +
+      '</div>' +
+      (a.lead ? '<p class="advice-lead">' + esc(a.lead) + '</p>' : '') +
+      '<ul class="advice-list">' + (a.items || []).map(function (it) {
+        return '<li><span class="advice-e" aria-hidden="true">' + esc(it.e || '•') + '</span><span>' + esc(it.t) + '</span></li>';
+      }).join('') + '</ul>' +
+      (a.warning ? '<p class="advice-warn">' + esc(a.warning) + '</p>' : '') +
+      (a.after ? '<div class="advice-after"><b>' + esc(a.after.title) + '</b><span>' + esc(a.after.text) + '</span></div>' : '') +
+    '</section>';
+  }
+
+  function dayAdvice(d) {
+    return adviceCard(adviceFor(d.day), { day: d.day, id: 'day-advice', cls: 'day-advice' });
+  }
+
   function isDetoxDay(day) {
     return !!(Program.detox && Program.detox.days.indexOf(Number(day)) >= 0);
   }
@@ -859,7 +881,7 @@
       ? '<section class="card"><div class="card-head"><h2>관리자 피드백</h2></div>' + feedbackList(d.feedback.slice().reverse(), false) + '</section>'
       : '';
 
-    return hero + daynav + cycleBlock(d) + timers + quote + quests + details + sponsorSlot(d.promo) + metrics + memo + feedback;
+    return hero + daynav + cycleBlock(d) + dayAdvice(d) + timers + quote + quests + details + metrics + memo + feedback;
   }
 
   /* ---------------- 28일 보드 ---------------- */
@@ -935,6 +957,7 @@
     return '<section class="week-block">' +
       '<div class="week-block-head"><span class="week-title">' + esc(o.title) + '</span><span class="week-sub">' + esc(o.subtitle) + '</span></div>' +
       '<div class="wk-briefs">' + o.briefs.filter(Boolean).map(briefCard).join('') + '</div>' +
+      (o.advice ? adviceCard(o.advice, { cls: 'board-advice' }) : '') +
       foodChipsBlock(o.food) +
       weekFastLine(o.list, o.week) +
       '<div class="board-grid ' + (o.gridCls || '') + '">' + o.list.map(cell).join('') + '</div>' +
@@ -967,7 +990,7 @@
     if (String(d.week) === 'all') {
       body += boardBlock({
         title: '1~3일차', subtitle: 'D1~3 · 당질 제한 · 장 해독',
-        briefs: [Program.detox], food: { allow: Program.detox.chips, avoid: Program.detox.forbiddenChips },
+        briefs: [Program.detox], advice: adviceFor(1), food: { allow: Program.detox.chips, avoid: Program.detox.forbiddenChips },
         list: d13, week: 1, gridCls: 'span3'
       });
       body += boardBlock({
@@ -979,13 +1002,14 @@
         var wkList = days.filter(function (x) { return x.week === w.week; });
         body += boardBlock({
           title: w.title, subtitle: w.subtitle,
-          briefs: [(Program.periods || [])[w.week]], food: blockFood(w.week), list: wkList, week: w.week
+          briefs: [(Program.periods || [])[w.week]], advice: adviceFor(wkList.length ? wkList[0].day : w.week * 7 - 6),
+          food: blockFood(w.week), list: wkList, week: w.week
         });
       });
     } else if (String(d.week) === '1') {
       body += boardBlock({
         title: '1~3일차', subtitle: 'D1~3 · 당질 제한 · 장 해독',
-        briefs: [Program.detox], food: { allow: Program.detox.chips, avoid: Program.detox.forbiddenChips },
+        briefs: [Program.detox], advice: adviceFor(1), food: { allow: Program.detox.chips, avoid: Program.detox.forbiddenChips },
         list: d13, week: 1, gridCls: 'span3 big', cards: true
       });
       body += boardBlock({
@@ -999,7 +1023,8 @@
       var list = days.filter(function (x) { return x.week === wk; });
       body += boardBlock({
         title: w.title, subtitle: w.summary,
-        briefs: [(Program.periods || [])[wk]], food: blockFood(wk), list: list, week: wk, gridCls: 'big', cards: true
+        briefs: [(Program.periods || [])[wk]], advice: adviceFor(list.length ? list[0].day : wk * 7 - 6),
+        food: blockFood(wk), list: list, week: wk, gridCls: 'big', cards: true
       });
     }
 
@@ -1219,43 +1244,91 @@
   function promoCard(promo) {
     var t = M.promoType(promo);
     var c = M.promoCategory(promo);
+    var today = M.todayStr();
+    var period = M.promoPeriodText(promo, today);
+    var state = M.promoStatus(promo, today);
     var disclosure = (isCoupangPromo(promo) || promo.disclosure) ? coupangDisclosureHTML() : '';
-    return '<article class="promo-card">' +
+    return '<article class="promo-card tone-' + t.tone + '" data-type="' + esc(promo.type) + '">' +
       '<div class="promo-card-top">' + promoThumb(promo) +
         '<div class="promo-card-head">' +
-          '<div class="promo-badges"><span class="badge tone-' + t.tone + '">' + esc(t.badge) + '</span><span class="badge cat">' + esc(c.label) + '</span></div>' +
+          '<div class="promo-badges"><span class="badge tone-' + t.tone + '">' + esc(t.badge) + '</span>' +
+            (t.key === 'coupang' ? '<span class="badge cat">' + esc(c.label) + '</span>' : '') +
+            (state !== 'ongoing' ? '<span class="badge pstate ' + state + '">' + esc(M.promoStatusLabel(promo, today)) + '</span>' : '') +
+          '</div>' +
           '<h3>' + esc(promo.title) + '</h3>' +
           '<p class="promo-memo">' + esc(promo.memo || '') + '</p>' +
         '</div>' +
       '</div>' +
+      (period ? '<p class="promo-period">' + icon('clock') + '<span>' + esc(period) + '</span></p>' : '') +
       (promo.benefit ? '<div class="promo-benefit">' + '<span class="benefit-label">혜택</span><span>' + esc(promo.benefit) + '</span></div>' : '') +
       '<a class="btn primary block sm" href="' + esc(promo.link) + '" target="_blank" rel="noopener noreferrer sponsored">' + esc(t.cta) + ' ' + icon('chevron') + '</a>' +
       disclosure +
     '</article>';
   }
 
+  /* 추천템 탭 — 공구(일정순) · 쿠팡(쉐이크/식단템/운동템/기타) · 광고 섹션 */
+  function promoSectionBlock(key, title, sub, items, inner) {
+    if (!items || !items.length) return '';
+    return '<section class="promo-section" data-section="' + esc(key) + '">' +
+      '<div class="promo-section-head"><h2>' + esc(title) + '</h2>' +
+        (sub ? '<span class="hint">' + esc(sub) + '</span>' : '') + '</div>' +
+      (inner || ('<div class="promo-list">' + items.map(promoCard).join('') + '</div>')) +
+    '</section>';
+  }
+
+  function coupangGroups(list) {
+    var order = Program.promos.coupangOrder || M.coupangOrder;
+    return order.map(function (k) {
+      var cat = Program.promos.categories[k] || { label: k };
+      var items = M.sortCoupang(list, M.todayStr()).filter(function (p) { return M.coupangCategoryOf(p) === k; });
+      if (!items.length) return '';
+      return '<div class="promo-subgroup" data-cat="' + esc(k) + '">' +
+        '<div class="promo-subhead"><span class="cat-tag">' + esc(cat.label) + '</span><span class="hint">' + items.length + '개</span></div>' +
+        '<div class="promo-list">' + items.map(promoCard).join('') + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
   function promos(d) {
-    var list = d.promos;
+    var list = d.promos || [];
+    var today = M.todayStr();
+    function ofType(k) { return list.filter(function (p) { return p && p.type === k; }); }
+    var groupbuy = M.sortPromos(ofType('groupbuy'), today);
+    var coupang = M.sortCoupang(ofType('coupang'), today);
+    var ads = M.sortPromos(ofType('ad'), today);
+    if (d.category && d.category !== 'all') {
+      coupang = coupang.filter(function (p) { return M.coupangCategoryOf(p) === d.category; });
+    }
+
     var typeSeg = segmented('promo-type', [['all', '전체'], ['groupbuy', '공구'], ['coupang', '쿠팡'], ['ad', '광고']], d.type);
-    var catItems = [['all', '전체']].concat(Object.keys(Program.promos.categories).map(function (k) { return [k, Program.promos.categories[k].label]; }));
-    var catChips = '<div class="chips-row">' + catItems.map(function (it) {
-      var on = String(it[0]) === String(d.category);
-      return '<button class="chip-btn ' + (on ? 'on' : '') + '" data-act="promo-cat" data-value="' + esc(it[0]) + '">' + esc(it[1]) + '</button>';
-    }).join('') + '</div>';
+    var body = '';
 
-    var filtered = list.filter(function (p) {
-      if (d.type !== 'all' && p.type !== d.type) return false;
-      if (d.category !== 'all' && p.category !== d.category) return false;
-      return true;
-    });
+    if (d.type === 'all' || d.type === 'groupbuy') {
+      body += promoSectionBlock('groupbuy', '공구', groupbuy.length ? '마감 임박한 일정순' : '', groupbuy);
+    }
+    if (d.type === 'all' || d.type === 'coupang') {
+      var catItems = [['all', '전체']].concat((Program.promos.coupangOrder || []).map(function (k) { return [k, Program.promos.categories[k].label]; }));
+      var catChips = '<div class="chips-row promo-subcats">' + catItems.map(function (it) {
+        var on = String(it[0]) === String(d.category || 'all');
+        return '<button class="chip-btn ' + (on ? 'on' : '') + '" data-act="promo-cat" data-value="' + esc(it[0]) + '">' + esc(it[1]) + '</button>';
+      }).join('') + '</div>';
+      body += promoSectionBlock('coupang', '쿠팡', '쉐이크 · 식단템 · 운동템 · 기타', coupang,
+        catChips + coupangGroups(coupang));
+    }
+    if (d.type === 'all' || d.type === 'ad') {
+      body += promoSectionBlock('ad', '광고', '', ads);
+    }
 
-    var body = filtered.length
-      ? '<div class="promo-list">' + filtered.map(promoCard).join('') + '</div>'
-      : emptyState('아직 등록된 공구가 없어요', '관리자가 공구·광고를 등록하면 여기에 보여요.');
+    if (!groupbuy.length && !coupang.length && !ads.length) {
+      body = emptyState('아직 등록된 추천템이 없어요', '관리자가 추천템을 등록하면 여기에 보여요.');
+    } else if (!body && d.type !== 'all') {
+      var t = Program.promos.types[d.type] || { label: '추천템' };
+      body = emptyState('등록된 ' + t.label + '이(가) 없어요', '관리자가 등록하면 여기에 보여요.');
+    }
 
-    var head = pageHead('공구 · 추천', '진행 중인 공구와 추천 제품을 모았어요');
-    var foot = '<p class="disclaimer">공구·광고는 참여자분들을 위해 골라둔 정보예요. 구매는 외부 링크에서 이루어지고, 일부 링크는 수수료가 발생할 수 있어요.</p>';
-    return head + typeSeg + catChips + body + foot;
+    var head = pageHead('추천템', '공구 · 쿠팡 · 광고에서 고른 추천 제품을 모았어요');
+    var foot = '<p class="disclaimer">추천템은 참여자분들을 위해 골라둔 정보예요. 구매는 외부 링크에서 이루어지고, 쿠팡 링크에는 파트너스 고지가 함께 표시돼요.</p>';
+    return head + typeSeg + body + foot;
   }
 
   /* ---------------- 튜토리얼 (첫 화면) ---------------- */
@@ -1435,7 +1508,7 @@
   function adminTabs(tab) {
     return '<div class="segmented wide">' +
       '<button class="' + (tab === 'participants' ? 'on' : '') + '" data-act="admin-tab" data-tab="participants">참여자 관리</button>' +
-      '<button class="' + (tab === 'promos' ? 'on' : '') + '" data-act="admin-tab" data-tab="promos">공구·광고 관리</button>' +
+      '<button class="' + (tab === 'promos' ? 'on' : '') + '" data-act="admin-tab" data-tab="promos">추천템 관리</button>' +
     '</div>';
   }
 
@@ -1504,7 +1577,7 @@
       '<div class="card-head"><h2>데모 · 설정</h2></div>' +
       '<p class="hint">지금은 로컬 데모 데이터로 동작해요. 실제 배포에서는 관리자 로그인과 서버 저장(Supabase)을 붙여야 합니다.</p>' +
       '<div class="tool-row">' +
-        '<button class="btn ghost sm" data-act="nav" data-route="promos">참여자 화면의 공구 탭 보기</button>' +
+        '<button class="btn ghost sm" data-act="nav" data-route="promos">참여자 화면의 추천템 탭 보기</button>' +
         '<button class="btn danger-ghost sm" data-act="reset-demo">데모 데이터 초기화</button>' +
       '</div>' +
     '</section>';
@@ -1520,9 +1593,10 @@
     return '<div class="promo-row ' + (p.active ? '' : 'is-off') + '">' +
       promoThumb(p) +
       '<div class="promo-row-main">' +
-        '<div class="promo-badges"><span class="badge tone-' + t.tone + '">' + esc(t.badge) + '</span><span class="badge cat">' + esc(c.label) + '</span>' + (p.featured ? '<span class="badge feat">배너</span>' : '') + '</div>' +
+        '<div class="promo-badges"><span class="badge tone-' + t.tone + '">' + esc(t.badge) + '</span>' + (t.key === 'coupang' ? '<span class="badge cat">' + esc(c.label) + '</span>' : '') + '</div>' +
         '<strong>' + esc(p.title) + '</strong>' +
         '<span class="hint">' + esc(host) + (p.memo ? ' · ' + esc(p.memo) : '') + '</span>' +
+        (M.promoPeriodText(p) ? '<span class="hint promo-row-period">' + icon('clock') + esc(M.promoPeriodText(p)) + '</span>' : '') +
         (isCoupangPromo(p) ? '<span class="hint coupang-row-note">고지 · ' + esc(Program.promos.coupangDisclosure) + '</span>' : '') +
       '</div>' +
       '<div class="promo-row-actions">' +
@@ -1536,21 +1610,25 @@
   function adminPromosBody(d) {
     var list = d.promos || [];
     var active = list.filter(function (p) { return p.active; }).length;
-    var body = list.length
-      ? '<div class="promo-admin-list">' + list.map(promoRow).join('') + '</div>'
-      : emptyState('등록된 공구·광고가 없어요', '새 공구를 등록하면 참여자 화면에 바로 보여요.');
+    var ordered = M.sortPromos(list.filter(function (p) { return p.type === 'groupbuy'; }))
+      .concat(M.sortCoupang(list.filter(function (p) { return p.type === 'coupang'; })))
+      .concat(M.sortPromos(list.filter(function (p) { return p.type === 'ad'; })))
+      .concat(list.filter(function (p) { return ['groupbuy', 'coupang', 'ad'].indexOf(p.type) < 0; }));
+    var body = ordered.length
+      ? '<div class="promo-admin-list">' + ordered.map(promoRow).join('') + '</div>'
+      : emptyState('등록된 추천템이 없어요', '새 추천템을 등록하면 참여자 화면에 바로 보여요.');
     return '<section class="stat-grid">' +
         '<div class="stat"><span>전체</span><b>' + list.length + '</b><small>개</small></div>' +
         '<div class="stat"><span>노출 중</span><b>' + active + '</b><small>개</small></div>' +
-        '<div class="stat"><span>배너</span><b>' + list.filter(function (p) { return p.featured && p.active; }).length + '</b><small>개</small></div>' +
+        '<div class="stat"><span>공구</span><b>' + list.filter(function (p) { return p.type === 'groupbuy'; }).length + '</b><small>개</small></div>' +
       '</section>' +
       '<div class="tool-row promo-tools">' +
-        '<button class="btn primary sm" data-act="promo-new">' + icon('plus') + ' 새 공구·광고</button>' +
+        '<button class="btn primary sm" data-act="promo-new">' + icon('plus') + ' 새 추천템</button>' +
       '</div>' +
-      '<p class="hint promo-hint">여기서 등록·수정한 내용이 참여자 화면의 배너와 공구 탭에 바로 반영돼요. ON/OFF로 노출을 끌 수 있어요.</p>' +
+      '<p class="hint promo-hint">여기서 등록·수정한 내용이 참여자 화면의 추천템 탭에 바로 반영돼요. 공구는 일정순, 쿠팡은 쉐이크·식단템·운동템·기타 순서로 보여요.</p>' +
       '<p class="hint coupon-hint">쿠팡 추천·쿠팡 링크에는 고지 문구 “' + esc(Program.promos.coupangDisclosure) + '”가 항상 표시돼요.</p>' +
       body +
-      '<p class="disclaimer">샘플 3건이 들어 있어요. 실제 링크로 수정하거나 삭제한 뒤 사용하세요. 쿠팡 파트너스 링크는 고지 문구 노출을 켜두는 게 좋아요.</p>';
+      '<p class="disclaimer">샘플 추천템이 들어 있어요. 실제 링크로 수정하거나 삭제한 뒤 사용하세요. 쿠팡 파트너스 링크는 고지 문구 노출을 켜두는 게 좋아요.</p>';
   }
 
   function adminDetail(d) {
@@ -1596,6 +1674,8 @@
         '<td><b>D' + x.day + '</b><br><span class="hint">' + esc(M.fmtShort(e.date || x.date)) + '</span></td>' +
         '<td><span class="pct-tag lv' + (x.score.pct >= 75 ? '3' : x.score.pct >= 50 ? '2' : x.score.pct > 0 ? '1' : '0') + '">' + (e.updatedAt ? x.score.pct + '%' : '—') + '</span></td>' +
         '<td>' + (typeof e.weight === 'number' ? e.weight : '—') + '</td>' +
+        '<td>' + (typeof e.muscle === 'number' ? e.muscle : '—') + '</td>' +
+        '<td>' + (typeof e.fat === 'number' ? e.fat : '—') + '</td>' +
         '<td>' + (typeof e.visceral === 'number' ? e.visceral : '—') + '</td>' +
         '<td>' + (M.photoCount(e) ? M.photoCount(e) + '장' : '—') + '</td>' +
         '<td>' + done + '</td>' +
@@ -1604,7 +1684,7 @@
     }).join('');
     var table = '<section class="card">' +
       '<div class="card-head"><h2>일별 기록</h2></div>' +
-      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Day</th><th>달성률</th><th>몸무게</th><th>내장지방</th><th>사진</th><th>기록</th><th>메모</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<div class="table-wrap"><table class="data-table"><thead><tr><th>Day</th><th>달성률</th><th>몸무게</th><th>골격근</th><th>체지방</th><th>내장지방</th><th>사진</th><th>기록</th><th>메모</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
     '</section>';
 
     var photos = '<section class="card">' +
@@ -1725,28 +1805,35 @@
 
   function promoSheet(d) {
     var p = d.promo || {};
+    var type = p.type || 'groupbuy';
     var typeOpts = Object.keys(Program.promos.types).map(function (k) {
-      return '<option value="' + k + '"' + ((p.type || 'groupbuy') === k ? ' selected' : '') + '>' + Program.promos.types[k].label + '</option>';
+      return '<option value="' + k + '"' + (type === k ? ' selected' : '') + '>' + Program.promos.types[k].label + '</option>';
     }).join('');
-    var catOpts = Object.keys(Program.promos.categories).map(function (k) {
-      return '<option value="' + k + '"' + ((p.category || 'shake') === k ? ' selected' : '') + '>' + Program.promos.categories[k].label + '</option>';
+    var cat = M.coupangCategoryOf(p);
+    var catOpts = (Program.promos.coupangOrder || []).map(function (k) {
+      return '<option value="' + k + '"' + (cat === k ? ' selected' : '') + '>' + Program.promos.categories[k].label + '</option>';
     }).join('');
     var checked = function (b) { return b ? ' checked' : ''; };
+    function dateVal(v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? v : ''; }
 
     return sheetWrap(
-      sheetHead(d.isNew ? '새 공구 · 광고' : '공구 · 광고 수정', '등록하면 참여자 화면에 바로 반영돼요') +
+      sheetHead(d.isNew ? '새 추천템' : '추천템 수정', '등록하면 참여자 화면에 바로 반영돼요') +
       '<form id="promo-form" class="stack" data-id="' + esc(p.id || '') + '" data-new="' + (d.isNew ? '1' : '0') + '">' +
         '<div class="field-row">' +
-          '<label class="field"><span>유형</span><select class="input" name="type">' + typeOpts + '</select></label>' +
-          '<label class="field"><span>카테고리</span><select class="input" name="category">' + catOpts + '</select></label>' +
+          '<label class="field"><span>분류</span><select class="input" id="promo-type-sel" name="type">' + typeOpts + '</select></label>' +
+          '<label class="field" data-promo-subcat' + (type === 'coupang' ? '' : ' hidden') + '><span>쿠팡 하위 카테고리</span><select class="input" name="category">' + catOpts + '</select></label>' +
         '</div>' +
+        '<div class="field-row" data-promo-schedule' + (type === 'groupbuy' ? '' : ' hidden') + '>' +
+          '<label class="field"><span>공구 시작일</span><input class="input" type="date" name="startsAt" value="' + esc(dateVal(p.startsAt)) + '"></label>' +
+          '<label class="field"><span>공구 마감일</span><input class="input" type="date" name="endsAt" value="' + esc(dateVal(p.endsAt)) + '"></label>' +
+        '</div>' +
+        '<p class="hint" data-promo-schedule' + (type === 'groupbuy' ? '' : ' hidden') + '>공구는 일정순(진행 중·마감 임박 순)으로 정렬돼요.</p>' +
         '<label class="field"><span>제품명</span><input class="input" name="title" maxlength="60" placeholder="예: 단백질쉐이크 2주 세트" value="' + esc(p.title || '') + '" required></label>' +
         '<label class="field"><span>한 줄 메모</span><input class="input" name="memo" maxlength="80" placeholder="예: 순탄수 15g↓ · 1회 20g 단백질" value="' + esc(p.memo || '') + '"></label>' +
         '<label class="field"><span>혜택 · 할인코드</span><input class="input" name="benefit" maxlength="80" placeholder="예: 참여코드 입력 시 10% 할인" value="' + esc(p.benefit || '') + '"></label>' +
         '<label class="field"><span>링크 URL</span><input class="input" name="link" inputmode="url" placeholder="https://..." value="' + esc(p.link || '') + '" required></label>' +
         '<label class="field"><span>썸네일 이미지 URL <em class="hint">(비우면 기본 아이콘)</em></span><input class="input" name="imageUrl" inputmode="url" placeholder="https://.../image.jpg" value="' + esc(p.imageUrl || '') + '"></label>' +
-        '<div class="check-line"><label class="check-field"><input type="checkbox" name="active"' + checked(p.active !== false) + '><span>참여자에게 노출</span></label>' +
-        '<label class="check-field"><input type="checkbox" name="featured"' + checked(p.featured) + '><span>오늘 화면 배너에 노출</span></label></div>' +
+        '<div class="check-line"><label class="check-field"><input type="checkbox" name="active"' + checked(p.active !== false) + '><span>참여자에게 노출</span></label></div>' +
         '<label class="check-field"><input type="checkbox" name="disclosure"' + checked(p.disclosure) + '><span>고지 문구 추가 표시 (쿠팡 외 링크)</span></label>' +
         '<p class="hint">쿠팡 추천·쿠팡 링크에는 “' + esc(Program.promos.coupangDisclosure) + '”가 항상 표시돼요.</p>' +
         '<div class="sheet-actions">' +

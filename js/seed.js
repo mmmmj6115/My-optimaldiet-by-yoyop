@@ -129,67 +129,76 @@
 
   function promos(today) {
     var t = today || M.todayStr();
+    function mk(o) {
+      return Object.assign({
+        type: 'groupbuy', category: 'etc', startsAt: '', endsAt: '',
+        title: '', memo: '', benefit: '', link: '', imageUrl: '',
+        disclosure: false, active: true, featured: false,
+        createdAt: isoAt(t, '07:00'), updatedAt: isoAt(t, '07:00')
+      }, o);
+    }
     return [
-      {
-        id: 'pr1',
-        type: 'groupbuy',
-        category: 'shake',
-        title: '단백질쉐이크 2주 세트',
+      /* 공구 — 일정(시작·마감일)이 있어야 일정순으로 정렬된다 */
+      mk({
+        id: 'pr1', type: 'groupbuy', title: '단백질쉐이크 2주 세트',
         memo: '순탄수 15g↓ · 1회 20g 단백질',
         benefit: '참여코드 입력 시 10% 할인',
-        link: 'https://example.com/groupbuy/shake',
-        imageUrl: '',
-        disclosure: false,
-        active: true,
-        featured: true,
-        createdAt: isoAt(t, '07:00'),
-        updatedAt: isoAt(t, '07:00')
-      },
-      {
-        id: 'pr2',
-        type: 'coupang',
-        category: 'supplement',
-        title: '종합비타민 60일분',
-        memo: '아침 영양제로 무난한 구성',
-        benefit: '쿠팡 최저가 · 로켓배송',
-        link: 'https://www.coupang.com/',
-        imageUrl: '',
-        disclosure: true,
-        active: true,
-        featured: false,
-        createdAt: isoAt(M.addDays(t, -1), '10:00'),
-        updatedAt: isoAt(M.addDays(t, -1), '10:00')
-      },
-      {
-        id: 'pr3',
-        type: 'ad',
-        category: 'food',
-        title: '무가당 그릭요거트',
-        memo: '허용식품 · 단백질 간식으로',
-        benefit: '브랜드 공식몰 15% 쿠폰',
-        link: 'https://example.com/ad/yogurt',
-        imageUrl: '',
-        disclosure: false,
-        active: true,
-        featured: false,
-        createdAt: isoAt(M.addDays(t, -3), '09:00'),
-        updatedAt: isoAt(M.addDays(t, -3), '09:00')
-      },
-      {
-        id: 'pr4',
-        type: 'groupbuy',
-        category: 'etc',
-        title: '보온 텀블러 공구',
+        startsAt: M.addDays(t, -2), endsAt: M.addDays(t, 5),
+        link: 'https://example.com/groupbuy/shake', featured: true, createdAt: isoAt(t, '07:00')
+      }),
+      mk({
+        id: 'pr5', type: 'groupbuy', title: '유기농 곤약면 10팩',
+        memo: '점심 2/3공기와 함께 먹기 좋은 저탄수 면',
+        benefit: '3팩 더 증정 · 오늘 자정 마감',
+        startsAt: M.addDays(t, -4), endsAt: M.addDays(t, 1),
+        link: 'https://example.com/groupbuy/konjac', createdAt: isoAt(M.addDays(t, -4), '09:00')
+      }),
+      mk({
+        id: 'pr6', type: 'groupbuy', title: '저당 그래놀라 6팩',
+        memo: '유지기 아침 간식용 · 당류 3g↓',
+        benefit: '오픈 준비 중 · 시작 알림',
+        startsAt: M.addDays(t, 3), endsAt: M.addDays(t, 10),
+        link: 'https://example.com/groupbuy/granola', active: true, createdAt: isoAt(t, '08:00')
+      }),
+      mk({
+        id: 'pr4', type: 'groupbuy', title: '보온 텀블러',
         memo: '물 2L 챙기기용 1L 텀블러',
         benefit: '마감된 공구예요',
-        link: 'https://example.com/groupbuy/tumbler',
-        imageUrl: '',
-        disclosure: false,
-        active: false,
-        featured: false,
-        createdAt: isoAt(M.addDays(t, -7), '11:00'),
-        updatedAt: isoAt(M.addDays(t, -7), '11:00')
-      }
+        startsAt: M.addDays(t, -14), endsAt: M.addDays(t, -7),
+        link: 'https://example.com/groupbuy/tumbler', active: false, createdAt: isoAt(M.addDays(t, -14), '11:00')
+      }),
+      /* 쿠팡 — 하위 카테고리 쉐이크 / 식단템 / 운동템 / 기타 */
+      mk({
+        id: 'pr2', type: 'coupang', category: 'shake', title: '단백질쉐이크 30팩',
+        memo: '1회 20g 단백질 · 순탄수 15g 미만',
+        benefit: '쿠팡 최저가 · 로켓배송', link: 'https://www.coupang.com/',
+        disclosure: true, createdAt: isoAt(M.addDays(t, -1), '10:00')
+      }),
+      mk({
+        id: 'pr7', type: 'coupang', category: 'meal', title: '닭가슴살 100g · 20팩',
+        memo: '점심 단백질 반찬으로 한 팩씩',
+        benefit: '로켓프레시', link: 'https://www.coupang.com/',
+        disclosure: true, createdAt: isoAt(M.addDays(t, -1), '10:10')
+      }),
+      mk({
+        id: 'pr8', type: 'coupang', category: 'workout', title: '요가매트 6mm',
+        memo: 'HIIT·홈트 할 때 무릎 부담 적은 두께',
+        benefit: '무료배송', link: 'https://www.coupang.com/',
+        disclosure: true, createdAt: isoAt(M.addDays(t, -1), '10:20')
+      }),
+      mk({
+        id: 'pr9', type: 'coupang', category: 'etc', title: '종합비타민 60일분',
+        memo: '4일차 이후 아침 영양제로 무난한 구성',
+        benefit: '쿠팡 최저가 · 로켓배송', link: 'https://www.coupang.com/',
+        disclosure: true, createdAt: isoAt(M.addDays(t, -1), '10:30')
+      }),
+      /* 광고 */
+      mk({
+        id: 'pr3', type: 'ad', title: '무가당 그릭요거트',
+        memo: '허용식품 · 단백질 간식으로',
+        benefit: '브랜드 공식몰 15% 쿠폰',
+        link: 'https://example.com/ad/yogurt', createdAt: isoAt(M.addDays(t, -3), '09:00')
+      })
     ];
   }
 

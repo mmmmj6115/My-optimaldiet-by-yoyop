@@ -1167,6 +1167,88 @@
   function activePromos(promos) {
     return (promos || []).filter(function (p) { return p && p.active; });
   }
+
+  /* ---------- 추천템 일정 정렬 · 쿠팡 하위 카테고리 ---------- */
+  var COUPANG_ORDER = ['shake', 'meal', 'workout', 'etc'];
+
+  function promoCategoryRank(key) {
+    var i = COUPANG_ORDER.indexOf(String(key || ''));
+    return i < 0 ? COUPANG_ORDER.length : i;
+  }
+
+  /* 진행 중(0) → 시작 전(1) → 끝남(2) */
+  function promoStatus(p, today) {
+    var t = today || todayStr();
+    var s = isDateStr(p && p.startsAt) ? p.startsAt : '';
+    var e = isDateStr(p && p.endsAt) ? p.endsAt : '';
+    if (e && e < t) return 'ended';
+    if (s && s > t) return 'upcoming';
+    return 'ongoing';
+  }
+
+  function promoStatusLabel(p, today) {
+    var st = promoStatus(p, today);
+    return st === 'ended' ? '종료' : st === 'upcoming' ? '시작 전' : '진행 중';
+  }
+
+  /* 일정순 정렬: 진행 중은 마감 임박한 순, 시작 전은 시작 빠른 순, 끝난 공구는 뒤로 */
+  function comparePromo(a, b, today) {
+    var t = today || todayStr();
+    var rank = { ongoing: 0, upcoming: 1, ended: 2 };
+    var ra = rank[promoStatus(a, t)], rb = rank[promoStatus(b, t)];
+    if (ra !== rb) return ra - rb;
+    var ea = isDateStr(a.endsAt) ? a.endsAt : '9999-12-31';
+    var eb = isDateStr(b.endsAt) ? b.endsAt : '9999-12-31';
+    var sa = isDateStr(a.startsAt) ? a.startsAt : '';
+    var sb = isDateStr(b.startsAt) ? b.startsAt : '';
+    if (ra === 1) {
+      if (sa !== sb) return sa < sb ? -1 : 1;
+      if (ea !== eb) return ea < eb ? -1 : 1;
+    } else if (ra === 2) {
+      if (ea !== eb) return ea > eb ? -1 : 1;
+    } else {
+      if (ea !== eb) return ea < eb ? -1 : 1;
+      if (sa !== sb) return sa < sb ? -1 : 1;
+    }
+    return String(a.title || '').localeCompare(String(b.title || ''));
+  }
+
+  function sortPromos(list, today) {
+    return (list || []).filter(Boolean).slice().sort(function (a, b) { return comparePromo(a, b, today); });
+  }
+
+  /* 쿠팡 하위 카테고리 순서: 쉐이크 → 식단템 → 운동템 → 기타 */
+  function sortCoupang(list, today) {
+    return (list || []).filter(Boolean).slice().sort(function (a, b) {
+      var ca = promoCategoryRank(a.category), cb = promoCategoryRank(b.category);
+      if (ca !== cb) return ca - cb;
+      return comparePromo(a, b, today);
+    });
+  }
+
+  /* 쿠팡 카드에 보여줄 하위 카테고리 키 (모르는 값은 기타) */
+  function coupangCategoryOf(p) {
+    var c = p && p.category;
+    return COUPANG_ORDER.indexOf(String(c || '')) >= 0 ? c : 'etc';
+  }
+
+  /* 카드에 찍히는 공구 일정 문구: 11.20~11.29 · 진행 중 / D-3 마감 */
+  function promoPeriodText(p, today) {
+    var t = today || todayStr();
+    var s = isDateStr(p && p.startsAt) ? p.startsAt : '';
+    var e = isDateStr(p && p.endsAt) ? p.endsAt : '';
+    if (!s && !e) return '';
+    var st = promoStatus(p, t);
+    var range = (s ? fmtShort(s) : '') + (e ? (s ? '~' : '~ ') + fmtShort(e) : '');
+    var tail;
+    if (st === 'ended') tail = '종료';
+    else if (st === 'upcoming') tail = '시작 전';
+    else if (e) {
+      var left = diffDays(t, e);
+      tail = left === 0 ? '오늘 마감' : 'D-' + (left > 0 ? left : 0) + ' 마감';
+    } else tail = '진행 중';
+    return range + ' · ' + tail;
+  }
   function featuredPromo(promos) {
     var list = activePromos(promos).filter(function (p) { return p.featured; });
     if (list.length) return list[0];
@@ -1265,6 +1347,14 @@
     promoCategory: promoCategory,
     activePromos: activePromos,
     featuredPromo: featuredPromo,
+    promoStatus: promoStatus,
+    promoStatusLabel: promoStatusLabel,
+    promoPeriodText: promoPeriodText,
+    sortPromos: sortPromos,
+    sortCoupang: sortCoupang,
+    promoCategoryRank: promoCategoryRank,
+    coupangCategoryOf: coupangCategoryOf,
+    coupangOrder: COUPANG_ORDER,
     isValidLink: isValidLink
   };
   if (typeof module !== 'undefined' && module.exports) { module.exports = global.App.Model; }

@@ -179,7 +179,9 @@
         var p = Object.assign({
           id: makeId('pr'),
           type: 'groupbuy',
-          category: 'shake',
+          category: 'etc',
+          startsAt: '',
+          endsAt: '',
           title: '',
           memo: '',
           benefit: '',
@@ -190,7 +192,7 @@
           featured: false
         }, clone(data || {}));
         p.type = p.type || 'groupbuy';
-        p.category = p.category || 'shake';
+        p.category = p.category || 'etc';
         p.createdAt = nowIso();
         p.updatedAt = p.createdAt;
         list.push(p);
@@ -201,7 +203,7 @@
       async updatePromo(id, patch) {
         var list = promos();
         var i = find(list, id);
-        if (i < 0) throw new Error('공구/광고를 찾지 못했어요.');
+        if (i < 0) throw new Error('추천템을 찾지 못했어요.');
         Object.keys(patch || {}).forEach(function (k) { list[i][k] = patch[k]; });
         list[i].updatedAt = nowIso();
         write(K.promos, list);

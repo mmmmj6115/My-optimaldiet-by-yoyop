@@ -53,13 +53,10 @@
       subtitle: 'D1~3 당질 제한 · D4~7 단백질 · 밥 2/3공기',
       summary: 'D1~3 단백질쉐이크만 · D4~7 점심에 밥 2/3공기(백미·현미·잡곡 모두 가능) + 영양제 시작',
       fastingDays: [],
-      cautions: [
-        '첫 3일은 단식으로 인해 체지방이 늘고 골격근량이 줄어 보일 수 있어요. 수면을 충분히 챙기고 수치에 일희일비하지 않아요.'
-      ],
+      adviceKey: 'w1',
       foodGroups: [],
       foodNote: '',
-      foodChips: [],
-      tip: '1주차가 끝나고 인바디에서 체지방이 늘고 골격근이 늘어난 수치가 나올 수 있어요. 결과와 상관없이 2주차로 진행합니다.'
+      foodChips: []
     },
     {
       week: 2,
@@ -68,17 +65,14 @@
       subtitle: '간헐적 단식 1회 + HIIT',
       summary: '주 1회 18~24시간 단식 · 점심·저녁 일반식 · 나머지 2끼 단백질쉐이크 (Day 10 단식)',
       fastingDays: [10],
-      cautions: [
-        'Day 10 단식이 개인 일정과 겹치면 다른 날로 옮겨도 돼요. 연속 단식은 안 돼요.'
-      ],
+      adviceKey: 'w2',
       foodGroups: [],
       foodNote: '',
       foodChips: [
         { e: '🥬', t: '채소·해조류·버섯' }, { e: '🥚', t: '달걀' }, { e: '🍗', t: '살코기·생선' },
         { e: '🫘', t: '콩류·퀴노아·낫토' }, { e: '🥜', t: '견과류 한 줌' }, { e: '🥛', t: '우유 2잔↓' },
         { e: '🧀', t: '천연치즈' }, { e: '☕', t: '블랙커피 1잔' }
-      ],
-      tip: '저탄수화물식으로 넘어가면 Day 3~14 사이에 감량이 잠시 멈출 수 있어요. 유지되는 것만으로도 잘 가고 있는 거예요.'
+      ]
     },
     {
       week: 3,
@@ -87,17 +81,14 @@
       subtitle: '간헐적 단식 2회 · 활동량 UP',
       summary: '주 2회 18~24시간 단식(Day 17·20) · 빨리 걷기·계단·식후 10분 걷기',
       fastingDays: [17, 20],
-      cautions: [
-        'Day 17·20 단식 사이에는 정상 식사일을 꼭 넣어요. 연속 이틀 단식은 금지예요.'
-      ],
+      adviceKey: 'w3',
       foodGroups: [],
       foodNote: '',
       foodChips: [
         { e: '🥬', t: '채소·해조류·버섯' }, { e: '🥚', t: '달걀' }, { e: '🍗', t: '살코기·생선' },
         { e: '🫘', t: '콩류·퀴노아·낫토' }, { e: '🥜', t: '견과류 한 줌' }, { e: '🍠', t: '고구마 1개' },
         { e: '🎃', t: '단호박' }, { e: '🫐', t: '블루베리' }
-      ],
-      tip: '처음에 빠진 근육이 회복되면서 체지방이 줄어요. 2주차가 끝나도 근손실이 이어지고 체지방이 줄면 2주차를 한 번 더 반복해요.'
+      ]
     },
     {
       week: 4,
@@ -106,17 +97,70 @@
       subtitle: '유지기 · 간헐적 단식 2~3회 · 저녁 밥 반 공기 이하(백미·현미·잡곡 가능)',
       summary: '주 2~3회 18~24시간 단식(Day 23·25·27) · 저녁 밥 반 공기 이하(백미·현미·잡곡 가능) · 과일은 오전/점심 직후만',
       fastingDays: [23, 25, 27],
-      cautions: [
-        'Day 23·25·27 단식이 일정과 겹치면 다른 날로 옮겨도 돼요. 연속 이틀은 안 돼요.'
-      ],
+      adviceKey: 'w4',
       foodGroups: [],
       foodNote: '',
       foodChips: [
         { e: '🥬', t: '채소 충분히' }, { e: '🍗', t: '단백질 반찬' }, { e: '🍚', t: '밥 반 공기 이하 (백미·현미·잡곡 가능)' },
         { e: '🍎', t: '과일 1개(오전)' }, { e: '🥜', t: '견과류' }, { e: '🫘', t: '콩류' },
         { e: '🥛', t: '우유 2잔↓' }, { e: '☕', t: '블랙커피 1잔' }
+      ]
+    }
+  ];
+
+  /* 주차별 조언 · 분기 규칙 (오늘 화면 조언 카드 + 보드 주차별 안내에서 함께 사용) */
+  var ADVICE = [
+    {
+      key: 'w1',
+      badge: '1주차',
+      days: [1, 2, 3, 4, 5, 6, 7],
+      title: '1~7일차 조언 · 주의사항',
+      lead: '1~3일차는 몸이 가장 크게 흔들리는 구간이에요. 수치는 잠시 잊고 순서대로만 가요.',
+      items: [
+        { e: '🥤', t: '1~3일차는 가급적 단백질쉐이크만 드세요. 배가 너무 고프면 허용 식품 안에서만 가볍게 드세요.' },
+        { e: '📊', t: '1~3일차 단식·당질 제한으로 1주차 인바디에서는 체지방이 늘고 골격근량이 많이 줄어 보일 수 있어요. 숫자에 연연하지 마세요.' },
+        { e: '💊', t: '두통이 심할 경우 타이레놀을 복용해도 괜찮아요.' },
+        { e: '🌿', t: '영양제는 가급적 4일차 이후부터, 공복 시간이 끝난 뒤(간헐적 단식·24시간 단식 후)에 섭취하세요.' }
+      ]
+    },
+    {
+      key: 'w2',
+      badge: '2주차',
+      days: [8, 9, 10, 11, 12, 13, 14],
+      branchDays: [8],
+      title: '2주차 시작 · 8일차 조언',
+      lead: '1주차 인바디가 어떤 숫자로 나와도 2주차는 그대로 진행해요.',
+      items: [
+        { e: '📊', t: '1주차 종료 후 인바디 결과상 체지방량 증가 · 골격근량 감소라는 일시적인 수치가 나올 수 있어요. 결과와 상관없이 2주차를 그대로 진행해 주세요.' },
+        { e: '⏳', t: '저탄수 식사가 시작되면서 3일차~14일차까지는 더 이상 감량이 없을 수 있어요. 이 시기엔 유지만 되어도 감사한 시기예요.' }
+      ]
+    },
+    {
+      key: 'w3',
+      badge: '3주차',
+      days: [15, 16, 17, 18, 19, 20, 21],
+      branchDays: [15],
+      title: '3주차 분기 · 15일차 조언',
+      lead: '15일차 인바디를 보고 다음 한 주를 정해요.',
+      items: [
+        { e: '🔀', t: '첫 주에 빠졌던 골격근량이 회복 추세이고 체지방이 감소했다면 → 3주차를 진행하세요.' },
+        { e: '🔀', t: '2주가 끝나도 근손실이 지속되고 체지방 감소가 없다면 → 2주차를 반복하세요.' }
       ],
-      tip: '골격근량은 회복 중이지만 시작 때만큼 돌아오지 않을 수 있어요. 3주차 이상 유지기를 거친 뒤 쉬는 걸 권해요.'
+      warning: '이틀 연속 단식은 불가해요! 월·목, 수·금처럼 간격을 두고 진행하고(○) 월·화, 화·수처럼 연속으로는 하지 마세요(✕).'
+    },
+    {
+      key: 'w4',
+      badge: '4주 · 유지기',
+      days: [22, 23, 24, 25, 26, 27, 28],
+      branchDays: [22],
+      title: '4주차 분기 · 22일차 조언',
+      lead: '22일차 인바디로 4주차를 갈지, 앞 주차를 반복할지 정해요.',
+      items: [
+        { e: '🔀', t: '1일차(첫 시작)만큼 골격근량이 회복되고 체지방이 감소했다면 → 4주차를 진행하세요.' },
+        { e: '🔀', t: '골격근량은 회복 중이지만 첫 시작만큼은 아니고 체지방은 감소했다면 → 3주차를 반복하세요.' },
+        { e: '🔀', t: '여전히 근손실이 지속되고 체지방 감소도 없다면 → 2주차를 반복하세요.' }
+      ],
+      after: { title: '완주 후 플랜', text: '3주 이상 유지기를 가진 뒤 스위치온을 재시작하거나, 유지기 없이 3주차 식단을 계속 유지할 수 있어요.' }
     }
   ];
 
@@ -439,15 +483,19 @@
   ];
 
   var PROMO_TYPES = {
-    groupbuy: { key: 'groupbuy', label: '진행중 공구', badge: '공구중', tone: 'groupbuy', cta: '공구 보러 가기' },
-    coupang: { key: 'coupang', label: '쿠팡 추천', badge: '쿠팡', tone: 'coupang', cta: '쿠팡에서 보기' },
-    ad: { key: 'ad', label: '브랜드 광고', badge: 'AD', tone: 'ad', cta: '자세히 보기' }
+    groupbuy: { key: 'groupbuy', label: '공구', badge: '공구', tone: 'groupbuy', cta: '공구 상품 보기' },
+    coupang: { key: 'coupang', label: '쿠팡', badge: '쿠팡', tone: 'coupang', cta: '쿠팡에서 보기' },
+    ad: { key: 'ad', label: '광고', badge: 'AD', tone: 'ad', cta: '자세히 보기' }
   };
+
+  /* 추천템 탭 카테고리 순서: 공구 → 쿠팡 → 광고, 쿠팡 하위는 쉐이크 → 식단템 → 운동템 → 기타 */
+  var PROMO_CATEGORY_ORDER = ['groupbuy', 'coupang', 'ad'];
+  var COUPANG_CATEGORY_ORDER = ['shake', 'meal', 'workout', 'etc'];
 
   var PROMO_CATEGORIES = {
     shake: { key: 'shake', label: '쉐이크' },
-    supplement: { key: 'supplement', label: '영양제' },
-    food: { key: 'food', label: '허용식품' },
+    meal: { key: 'meal', label: '식단템' },
+    workout: { key: 'workout', label: '운동템' },
     etc: { key: 'etc', label: '기타' }
   };
 
@@ -455,11 +503,12 @@
 
   var PROGRAM = {
     id: 'my-optimal-diet',
-    version: '1.6.0',
+    version: '1.7.0',
     name: '마이옵티멀다이어트',
     title: '28일 루틴',
     totalDays: 28,
     weeks: WEEKS,
+    advice: ADVICE,
     days: DAYS,
     detox: DETOX,
     w1Plan: W1_PLAN,
@@ -489,7 +538,13 @@
     foodIcons: FOOD_ICONS,
     eatingOut: EATING_OUT,
     rules: RULES,
-    promos: { types: PROMO_TYPES, categories: PROMO_CATEGORIES, coupangDisclosure: COUPANG_DISCLOSURE },
+    promos: {
+      types: PROMO_TYPES,
+      categories: PROMO_CATEGORIES,
+      typeOrder: PROMO_CATEGORY_ORDER,
+      coupangOrder: COUPANG_CATEGORY_ORDER,
+      coupangDisclosure: COUPANG_DISCLOSURE
+    },
     disclaimer: '이 앱은 원 프로그램 자료를 요약해 만든 참여자용 기록 도구입니다. 질환이 있거나 약을 복용 중이라면 시작 전에 의료진과 상담하세요.'
   };
 

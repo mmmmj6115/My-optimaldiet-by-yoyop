@@ -1395,3 +1395,51 @@ h1, h2, h3, p { margin: 0; }
 .slot-disclosure { margin: -6px 2px 12px; }
 .coupon-hint { color: #6C54B8; font-weight: 600; }
 .promo-row-main .coupang-row-note { color: #87928C; font-size: 9.5px; }
+
+/* ---------- v12: 골격근량 히어로 · 주차별 조언 · 추천템 ---------- */
+/* 좁은 화면에서는 인바디 4항목을 2×2로, 넓어지면 한 줄로 */
+.hero-stats { grid-template-columns: repeat(2, 1fr); }
+@media (min-width: 420px) {
+  .hero-stats { grid-template-columns: repeat(4, 1fr); }
+}
+[hidden] { display: none !important; }
+
+.advice-card {
+  background: #fff; border: 1px solid #E7E1F5; border-left: 4px solid #8B7BD8;
+  border-radius: var(--radius); padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow);
+}
+.advice-head { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 8px; }
+.advice-head b { font-size: 13.5px; font-weight: 800; color: #3A3560; letter-spacing: -0.02em; }
+.advice-badge { font-size: 10px; font-weight: 800; color: #6C54B8; background: #F1ECFC; border-radius: 6px; padding: 3px 7px; }
+.advice-now { font-size: 9.5px; font-weight: 800; color: #A8432C; background: #FDECE7; border-radius: 5px; padding: 2px 6px; }
+.advice-lead { font-size: 11.5px; color: #7A749A; line-height: 1.5; margin-bottom: 8px; }
+.advice-list { display: flex; flex-direction: column; gap: 7px; }
+.advice-list li { display: flex; gap: 8px; font-size: 12px; line-height: 1.55; color: var(--ink-2); }
+.advice-e { flex: 0 0 auto; width: 18px; text-align: center; }
+.advice-warn {
+  margin-top: 9px; font-size: 11.5px; font-weight: 700; color: #A8432C;
+  background: #FDECE7; border-radius: 9px; padding: 8px 10px; line-height: 1.5;
+}
+.advice-after { margin-top: 9px; background: #F4F8F2; border-radius: 9px; padding: 9px 10px; }
+.advice-after b { display: block; font-size: 10.5px; font-weight: 800; color: #1B6B50; margin-bottom: 3px; }
+.advice-after span { font-size: 11.5px; color: var(--ink-2); line-height: 1.5; }
+.board-advice { margin: 0 0 12px; }
+.day-advice { margin-top: 12px; }
+
+.promo-section { margin-bottom: 20px; }
+.promo-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 4px 2px 10px; }
+.promo-section-head h2 { font-size: 15px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); }
+.promo-section-head .hint { font-size: 10.5px; }
+.promo-subcats { margin: -2px 0 12px; }
+.promo-subgroup { margin-bottom: 12px; }
+.promo-subhead { display: flex; align-items: center; gap: 6px; margin: 0 2px 7px; }
+.cat-tag { font-size: 10.5px; font-weight: 800; color: #1B6B50; background: var(--brand-soft); border-radius: 6px; padding: 3px 8px; }
+.promo-period {
+  display: flex; align-items: center; gap: 5px; margin-top: 9px;
+  font-size: 11px; font-weight: 700; color: #6E7F76;
+}
+.promo-period .ic { width: 13px; height: 13px; }
+.badge.pstate.upcoming { background: #FFF4DE; color: #9A6A12; }
+.badge.pstate.ended { background: var(--gray-soft); color: #98A39D; }
+.promo-row-period { color: #6E7F76 !important; display: flex; align-items: center; gap: 3px; }
+.promo-row-period .ic { width: 11px; height: 11px; flex: 0 0 auto; }

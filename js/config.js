@@ -7,7 +7,7 @@
 
   var CONFIG = {
     appName: '마이옵티멀다이어트 28일 루틴',
-    version: '1.6.0',
+    version: '1.7.0',
 
     /* 'demo' | 'supabase' | 'kakao'
      *  - demo    : 서버·키 없이 로컬 체험 (기본값)
