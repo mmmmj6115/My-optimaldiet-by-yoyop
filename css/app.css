@@ -1362,8 +1362,7 @@ h1, h2, h3, p { margin: 0; }
 .cycle-chip.missing { background: #EEF1F0; color: #6E7B75; font-weight: 700; }
 .cycle-note { flex: 1 1 100%; font-size: 10.5px; line-height: 1.5; color: var(--muted); margin-top: 1px; }
 .cycle-inbody { margin: 0 0 8px; }
-.cycle-week-row { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 7px; scrollbar-width: none; }
-.cycle-week-row::-webkit-scrollbar { display: none; }
+.cycle-week-row { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 7px; }
 .cycle-week {
   display: inline-flex; flex-direction: column; gap: 1px; flex: 0 0 auto;
   padding: 6px 9px; border-radius: 10px; background: var(--surface-2); white-space: nowrap;
@@ -1395,3 +1394,4 @@ h1, h2, h3, p { margin: 0; }
 .promo-card .coupang-disclosure { margin-top: 8px; }
 .slot-disclosure { margin: -6px 2px 12px; }
 .coupon-hint { color: #6C54B8; font-weight: 600; }
+.promo-row-main .coupang-row-note { color: #87928C; font-size: 9.5px; }

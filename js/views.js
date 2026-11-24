@@ -1523,6 +1523,7 @@
         '<div class="promo-badges"><span class="badge tone-' + t.tone + '">' + esc(t.badge) + '</span><span class="badge cat">' + esc(c.label) + '</span>' + (p.featured ? '<span class="badge feat">배너</span>' : '') + '</div>' +
         '<strong>' + esc(p.title) + '</strong>' +
         '<span class="hint">' + esc(host) + (p.memo ? ' · ' + esc(p.memo) : '') + '</span>' +
+        (isCoupangPromo(p) ? '<span class="hint coupang-row-note">고지 · ' + esc(Program.promos.coupangDisclosure) + '</span>' : '') +
       '</div>' +
       '<div class="promo-row-actions">' +
         '<button class="switch sm ' + (p.active ? 'on' : '') + '" data-act="promo-toggle" data-id="' + esc(p.id) + '" role="switch" aria-checked="' + !!p.active + '" aria-label="노출 ' + (p.active ? '끄기' : '켜기') + '"><i></i></button>' +
