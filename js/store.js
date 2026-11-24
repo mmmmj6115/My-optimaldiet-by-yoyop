@@ -83,28 +83,40 @@
 
       async createParticipant(data) {
         var list = participants();
+        /* personal: 이 기기에서 혼자 쓰는 '내 기록' — 이름·참여코드 없이도 만들 수 있다 */
+        var personal = !!(data && data.personal);
         var name = String((data && data.name) || '').trim();
-        if (!name) throw new Error('이름을 입력해주세요.');
+        if (!name && !personal) throw new Error('이름을 입력해주세요.');
         var startDate = (data && data.startDate) || null;
         if (!startDate) throw new Error('시작일을 입력해주세요.');
         var p = {
           id: makeId('p'),
           name: name,
           nickname: String((data && data.nickname) || '').trim(),
-          code: uniqueCode(list, data.code),
+          code: personal ? '' : uniqueCode(list, data.code),
           startDate: startDate,
           createdAt: nowIso(),
-          settings: {
+          personal: personal || undefined,
+          settings: Object.assign({
             lastMeal: (global.App.Program && global.App.Program.check.lastMeal) || '19:30',
             wake: (global.App.Program && global.App.Program.check.wakeTime) || '07:00'
-          },
+          }, (data && data.settings) || {}),
           planOverrides: {},
           entries: {},
-          feedback: []
+          feedback: [],
+          rounds: []
         };
         list.push(p);
         write(K.participants, list);
         return clone(p);
+      },
+
+      async getPersonal() {
+        var list = participants();
+        for (var i = 0; i < list.length; i++) {
+          if (list[i] && list[i].personal) return clone(list[i]);
+        }
+        return null;
       },
 
       async updateParticipant(id, patch) {
@@ -273,6 +285,7 @@
       getParticipant(id) { return request('/participants/' + encodeURIComponent(id)); },
       findByCode(code) { return request('/participants?code=' + encodeURIComponent(normalizeCode(code))).then(function (r) { return (r || [])[0] || null; }); },
       createParticipant(data) { return request('/participants', { method: 'POST', body: data }); },
+      getPersonal() { return request('/participants?personal=1').then(function (r) { return (r || [])[0] || null; }); },
       updateParticipant(id, patch) { return request('/participants/' + encodeURIComponent(id), { method: 'PATCH', body: patch }); },
       putEntry(id, day, entry) { return request('/participants/' + encodeURIComponent(id) + '/entries/' + day, { method: 'PUT', body: entry }); },
       setPlanOverride(id, day, meals) { return request('/participants/' + encodeURIComponent(id) + '/plans/' + day, { method: 'PATCH', body: { meals: meals } }); },

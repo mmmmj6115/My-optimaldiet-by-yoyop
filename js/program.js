@@ -540,7 +540,7 @@
 
   var PROGRAM = {
     id: 'my-optimal-diet',
-    version: '1.10.0',
+    version: '1.11.0',
     name: '마이옵티멀다이어트',
     title: '28일 루틴',
     totalDays: 28,

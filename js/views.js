@@ -375,28 +375,29 @@
 
   function heroBlock(d) {
     var p = d.participant;
-    var nickname = d.nickname || p.nickname || p.name || '?';
+    var nickname = d.nickname || p.nickname || p.name || '내 기록';
     var body = d.body || {};
     var week = Program.weeks[d.week - 1] || {};
     function stat(label, key, unit) {
       var snap = body[key];
       return '<div class="hs"><span>' + esc(label) + '</span>' + bodyNumber(snap ? snap.value : null, unit) + '</div>';
     }
-    var sub = [];
-    if (nickname !== p.name) sub.push(p.name);
-    sub.push((week.title || '') + ' · ' + M.fmtLong(d.date) + (d.isToday ? ' · 오늘' : ''));
+    /* 프로필 아래 줄은 회차·주차·날짜만 — 본명(데모 이름)은 보여주지 않는다 */
+    var sub = [(week.title || '') + ' · ' + M.fmtLong(d.date) + (d.isToday ? ' · 오늘' : '')];
     var bd = body.weight || body.muscle || body.fat || body.visceral;
     var stamp = bd && bd.date ? ' · ' + M.fmtShort(bd.date) + ' 기록' : '';
+    var dayBadge = d.beforeStart ? '시작 전' : 'Day ' + d.day;
 
     return '<section class="hero">' +
       '<div class="hero-top">' +
         '<button class="hero-avatar" data-act="open-profile" aria-label="내 정보 · 계정 전환">' + esc(String(nickname).slice(0, 1)) + '</button>' +
         '<div class="hero-id">' +
-          '<p class="hero-kicker">' + esc(Program.name) + ' · ' + esc(Program.title) + '</p>' +
+          '<p class="hero-kicker">' + esc(Program.name) + ' · ' + esc(Program.title) +
+            '<span class="hero-round" title="진행 회차">' + esc(M.roundLabel(d.round)) + '</span></p>' +
           '<h1 class="hero-name">' + esc(nickname) + ' <span>님</span></h1>' +
           '<span class="hero-real">' + esc(sub.join(' · ')) + '</span>' +
         '</div>' +
-        '<span class="hero-day">Day ' + d.day + '</span>' +
+        '<span class="hero-day' + (d.beforeStart ? ' is-before' : '') + '">' + esc(dayBadge) + '</span>' +
       '</div>' +
       '<div class="hero-stats">' +
         stat('몸무게', 'weight', 'kg') +
@@ -835,6 +836,16 @@
 
     var hero = heroBlock(d);
 
+    /* 시작일을 미래로 골랐을 때 — 오류가 아니라 '시작 전(D-N)' 안내로 보여준다 */
+    var startBanner = (d.beforeStart && d.startDate)
+      ? '<section class="start-banner" id="start-banner">' +
+          '<span class="sb-emoji" aria-hidden="true">🗓️</span>' +
+          '<div class="sb-text"><b>' + esc(M.fmtLong(d.startDate)) + '부터 시작해요 · D-' + (d.daysToStart || 0) + '</b>' +
+            '<p>아직 28일이 시작 전이에요. 그날이 되면 Day 1로 기록이 열려요. 시작일은 튜토리얼에서 바꿀 수 있어요.</p></div>' +
+          '<button class="btn ghost sm" data-act="nav" data-route="tutorial">시작일 변경</button>' +
+        '</section>'
+      : '';
+
     var daynav = '<div class="daynav">' +
       '<button class="icon-btn" data-act="prev-day" aria-label="이전 날"' + (d.day <= 1 ? ' disabled' : '') + '>' + icon('back') + '</button>' +
       '<div class="daynav-center">' +
@@ -896,7 +907,7 @@
         '</section>'
       : '';
 
-    return finalBanner + hero + daynav + cycleBlock(d) + dayAdvice(d) + timers + quote + quests + details + metrics + memo + feedback;
+    return finalBanner + hero + startBanner + daynav + cycleBlock(d) + dayAdvice(d) + timers + quote + quests + details + metrics + memo + feedback;
   }
 
   /* ---------------- 28일 보드 ---------------- */
@@ -983,7 +994,7 @@
     var days = d.days;
     var cur = d.currentDay;
     var head = pageHead('28일 체크보드', 'Day ' + (cur || 1) + ' 진행 중 · 전체 달성률 ' + d.overall + '%');
-    var report = reportCta((cur || 0) >= 28);
+    var report = reportCta((cur || 0) >= 28, d.round);
 
     var seg = segmented('board-week', [['all', '전체'], ['1', '1주'], ['2', '2주'], ['3', '3주'], ['4', '4주']], d.week);
 
@@ -1246,7 +1257,7 @@
         '<div class="wk-list">' + rows + '</div>' +
       '</section>' +
       '<p class="disclaimer">단식일 다음날 측정값은 수분 영향으로 골격근량이 낮게 나올 수 있어 주차 인바디 집계에서 제외해요.</p>' +
-      reportCta(wm.currentDay >= 28);
+      reportCta(wm.currentDay >= 28, d.round);
   }
 
   function weeklyReadTable(wm) {
@@ -1274,11 +1285,11 @@
 
   /* ---------------- 28일 최종 리포트 ---------------- */
   /* 보드 상단 · 인바디 하단 · 오늘 축하 배너에서 함께 여는 버튼 */
-  function reportCta(done) {
+  function reportCta(doneCheck, round) {
     return '<button class="report-cta" data-act="open-report">' +
       '<span class="rc-emoji" aria-hidden="true">🏆</span>' +
-      '<span class="rc-text"><b>28일 최종 리포트</b>' +
-        '<small>' + (done ? '28일 완주 기록 보기' : '지금까지 기록으로 미리 보기') + '</small></span>' +
+      '<span class="rc-text"><b>28일 최종 리포트' + (round && round > 1 ? ' · ' + esc(M.roundLabel(round)) : '') + '</b>' +
+        '<small>' + (doneCheck ? '28일 완주 기록 보기' : '지금까지 기록으로 미리 보기') + '</small></span>' +
       '<span class="rc-arrow" aria-hidden="true">' + icon('chevron') + '</span>' +
     '</button>';
   }
@@ -1326,10 +1337,46 @@
     var o = r.overall;
     var ib = r.inbody;
     var preview = !r.finished;
+    var round = d.round || 1;
+    var total = d.total || round;
+    var rounds = d.rounds || [];
+    var archived = round !== total;
 
-    var note = preview
-      ? '<p class="rs-preview" id="rs-preview">' + esc('Day ' + (r.currentDay || 1) + '까지 기록으로 미리 보는 리포트예요 · 28일이 끝나면 그날 기록으로 다시 채워져요.') + '</p>'
-      : '<p class="rs-done" id="rs-done">' + esc('28일 완주! 끝까지 기록한 나를 칭찬해 주세요 🎉') + '</p>';
+    /* 회차 탭 — 지난 회차 리포트도 언제든 다시 열어본다 */
+    var roundTabs = total > 1
+      ? '<div class="rs-rounds" id="rs-rounds" role="tablist" aria-label="회차 선택">' + rounds.map(function (x) {
+          var on = x.round === round;
+          var label = x.current ? (x.finished ? '현재 ' + x.label : '진행 중 ' + x.label) : x.label + ' 결과';
+          return '<button type="button" role="tab" aria-selected="' + on + '" class="chip-btn rs-round-chip' + (on ? ' on' : '') + '"' +
+            ' data-act="report-round" data-round="' + x.round + '">' + esc(label) + '</button>';
+        }).join('') + '</div>'
+      : '';
+
+    /* 회차 누적 비교 — 2회차부터 */
+    var compare = rounds.length > 1
+      ? '<section class="rs-sec" id="rs-rounds-compare">' +
+          '<h3>회차 누적 비교</h3>' +
+          '<div class="rs-cmp">' +
+            '<div class="rs-cmp-row head"><span>회차</span><span>기간</span><span>달성률</span><span>몸무게</span><span>체지방</span></div>' +
+            rounds.map(function (x) {
+              return '<div class="rs-cmp-row' + (x.round === round ? ' on' : '') + '">' +
+                '<span>' + esc(x.label) + (x.current ? '<em>진행</em>' : '') + '</span>' +
+                '<span class="rs-cmp-date">' + esc(M.fmtShort(x.startDate)) + '~' + esc(M.fmtShort(x.endDate)) + '</span>' +
+                '<span>' + clampPct(x.rate) + '%</span>' +
+                '<span>' + (x.weight === null || x.weight === undefined ? '—' : esc(M.deltaText(x.weight)) + 'kg') + '</span>' +
+                '<span>' + (x.fat === null || x.fat === undefined ? '—' : esc(M.deltaText(x.fat)) + 'kg') + '</span>' +
+              '</div>';
+            }).join('') +
+          '</div>' +
+          '<p class="hint">지난 회차 결과는 지우지 않고 그대로 보관해요. 탭을 눌러 회차별 리포트를 다시 볼 수 있어요.</p>' +
+        '</section>'
+      : '';
+
+    var note = archived
+      ? '<p class="rs-done" id="rs-archived">' + esc(M.roundLabel(round) + ' 결과 · 보관된 기록이에요.') + '</p>'
+      : (preview
+        ? '<p class="rs-preview" id="rs-preview">' + esc('Day ' + (r.currentDay || 1) + '까지 기록으로 미리 보는 리포트예요 · 28일이 끝나면 그날 기록으로 다시 채워져요.') + '</p>'
+        : '<p class="rs-done" id="rs-done">' + esc('28일 완주! 끝까지 기록한 나를 칭찬해 주세요 🎉') + '</p>');
 
     var stats = '<div class="rs-stats">' +
       '<div class="rs-stat main"><span>28일 전체 달성률</span><b>' + clampPct(o.rate) + '<em>%</em></b>' +
@@ -1397,11 +1444,14 @@
 
     var foot = '<div class="rs-foot"><b>@yoyop_diet</b><span>' + esc(Program.name) + ' · 28일 루틴 · v' + esc(Program.version) + '</span></div>' +
       '<button class="btn primary block rs-save" data-act="save-report-image">📷 리포트 이미지 저장 (PNG)</button>' +
+      (archived ? '' :
+        '<button class="btn outline block rs-next-round" data-act="open-round">🔄 다음 회차(' + (total + 1) + '차) 시작하기</button>' +
+        '<p class="hint center">다음 회차를 시작해도 이번 ' + esc(M.roundLabel(total)) + ' 기록은 지우지 않고 ' + esc(M.roundLabel(total)) + ' 결과로 보관돼요.</p>') +
       '<p class="hint center">저장한 이미지에는 달성률 요약 · 인바디 변화 · 잘 지킨/아쉬웠던 루틴만 담겨요. 유지기 가이드는 이 리포트에서 함께 볼 수 있어요.</p>';
 
     return sheetWrap(
-      sheetHead('🏆 28일 최종 리포트', r.nickname + ' · ' + M.fmtShort(r.startDate) + ' ~ ' + M.fmtShort(r.endDate)) +
-      note + stats + inbody + weeks + routines + maintenanceGuide() + foot,
+      sheetHead('🏆 28일 최종 리포트' + (total > 1 ? (archived ? ' · ' + M.roundLabel(round) + ' 결과' : ' · ' + M.roundLabel(round)) : ''), r.nickname + ' · ' + M.fmtShort(r.startDate) + ' ~ ' + M.fmtShort(r.endDate)) +
+      roundTabs + note + stats + compare + inbody + weeks + routines + maintenanceGuide() + foot,
       'report'
     );
   }
@@ -1548,6 +1598,32 @@
     '</section>';
   }
 
+  /* 튜토리얼 · 내 정보에서 보는 회차 카드 — 1차 · 2차 · N차를 누적해서 시작한다 */
+  function roundCardBlock(d) {
+    var round = d.round || 1;
+    var next = round + 1;
+    var history = d.roundHistory || [];
+    var curDay = d.currentDay || 0;
+    var rows = history.map(function (r) {
+      return '<div class="round-row"><span>' + esc(r.label) + ' 결과</span><b>' +
+        '달성률 ' + clampPct(r.rate) + '%' +
+        (r.weight === null || r.weight === undefined ? '' : ' · 몸무게 ' + esc(M.deltaText(r.weight)) + 'kg') +
+        (r.fat === null || r.fat === undefined ? '' : ' · 체지방 ' + esc(M.deltaText(r.fat)) + 'kg') +
+        '</b></div>';
+    }).join('') || '<div class="round-row"><span>지난 회차</span><b>아직 없어요</b></div>';
+    return '<section class="card tut-card" id="round-card">' +
+      '<div class="card-head"><span class="week-chip">회차</span><h2>' + esc(M.roundLabel(round)) + ' 진행 중</h2>' +
+        '<span class="hint">28일씩 누적</span></div>' +
+      '<div class="round-rows">' +
+        '<div class="round-row now"><span>지금 회차</span><b>' + esc(M.roundLabel(round)) + ' · ' +
+          (curDay ? 'Day ' + Math.min(curDay, 28) + ' / 28' : '시작 전') + '</b></div>' +
+        rows +
+      '</div>' +
+      '<button class="btn outline block round-next-btn" data-act="open-round">🔄 다음 회차(' + next + '차) 시작하기</button>' +
+      '<p class="hint">다음 회차를 시작해도 지난 기록은 지우지 않고 보관해요. 최종 리포트에서 회차별로 다시 볼 수 있어요.</p>' +
+    '</section>';
+  }
+
   function tutorial(d) {
     var T = Program.tutorial || {};
     var start = d.start || {};
@@ -1605,9 +1681,17 @@
       '<form id="tutorial-form" class="tut-form" autocomplete="off">' +
         '<label class="tut-field wide"><span>닉네임</span>' +
           '<span class="tut-input"><input type="text" name="nickname" data-tut="nickname" maxlength="12" value="' + esc(nick) + '" placeholder="예: 유니"></span></label>' +
-        '<label class="tut-field wide"><span>시작일</span>' +
-          '<span class="tut-input"><input type="date" name="startDate" data-tut="startDate" value="' + esc(startDate) + '" aria-label="28일 시작일"></span></label>' +
-        '<p class="hint tut-start-hint">오늘 시작하면 오늘을 1일차로 잡아요. 지난 날짜로 바꾸면 그날부터 기록해요.</p>' +
+        '<div class="tut-field wide tut-start-field">' +
+          '<span class="tut-start-label">마이옵티멀다이어트 시작일</span>' +
+          '<span class="tut-input"><input type="date" name="startDate" data-tut="startDate" value="' + esc(startDate) + '" id="tut-start-date" aria-label="마이옵티멀다이어트 시작일"></span>' +
+          '<div class="chips-row tut-start-chips">' +
+            [[0, '오늘'], [-1, '어제'], [-7, '일주일 전']].map(function (c) {
+              var on = startDate === M.addDays(M.todayStr(), c[0]);
+              return '<button type="button" class="chip-btn tut-start-chip' + (on ? ' on' : '') + '" data-act="tut-start" data-offset="' + c[0] + '">' + esc(c[1]) + '</button>';
+            }).join('') +
+          '</div>' +
+          '<p class="hint tut-start-hint" id="tut-start-preview">' + esc(d.startPreview || '') + '</p>' +
+        '</div>' +
         genderBlock +
         cycleBlock +
         '<div class="tut-grid">' +
@@ -1674,7 +1758,7 @@
         : '저장하면 오늘 탭으로 이동해요. 튜토리얼은 언제든 다시 볼 수 있어요.') + '</p>' +
     '</div>';
 
-    return head + intro + info + rules + proteinCard(d.weight) + forbidden + allowed + eating + cta +
+    return head + intro + info + roundCardBlock(d) + rules + proteinCard(d.weight) + forbidden + allowed + eating + cta +
       '<p class="disclaimer">' + esc(Program.disclaimer) + '</p>';
   }
 
@@ -2043,24 +2127,59 @@
     var p = d.participant;
     var provider = d.provider === 'supabase' || d.provider === 'kakao' ? '카카오 로그인'
       : (d.provider === 'code' ? '참여코드 입장' : (d.provider === 'admin' || d.role === 'admin' ? '관리자 코드' : '이 기기에서 시작'));
+    /* 본명(데모 이름)은 여기에도 보여주지 않고 닉네임만 쓴다 */
+    var title = p.nickname || p.name || '내 기록';
+    var round = d.round || M.roundNumber(p);
+    var metaLine = (p.code && !p.personal ? '참여코드 ' + esc(p.code) + ' · ' : '') + '시작 ' + esc(p.startDate);
+    var progress = d.currentDay ? 'Day ' + d.currentDay + ' / 28' : '시작 전';
     return sheetWrap(
       sheetHead('내 정보') +
-      '<div class="profile-head"><span class="avatar lg">' + esc(String(p.nickname || p.name || '?').slice(0, 1)) + '</span>' +
-        '<div><h3>' + esc(p.name) + '</h3><p class="hint">' + (p.nickname ? '닉네임 ' + esc(p.nickname) + ' · ' : '') + '참여코드 ' + esc(p.code) + ' · 시작 ' + esc(p.startDate) + '</p></div>' +
+      '<div class="profile-head"><span class="avatar lg">' + esc(String(title).slice(0, 1)) + '</span>' +
+        '<div><h3>' + esc(title) + '</h3><p class="hint">' + metaLine + '</p></div>' +
       '</div>' +
       '<div class="profile-rows">' +
-        '<div><span>진행</span><b>Day ' + d.currentDay + ' / 28</b></div>' +
+        '<div><span>회차</span><b>' + esc(M.roundLabel(round)) + ' · ' + esc(progress) + '</b></div>' +
         '<div><span>28일 달성률</span><b>' + d.rate + '%</b></div>' +
         '<div><span>로그인 방식</span><b>' + esc(provider) + '</b></div>' +
       '</div>' +
       '<form id="profile-form" class="nick-form" data-id="' + esc(p.id || '') + '">' +
         '<label class="field"><span>닉네임 <em class="hint">(오늘 화면에 표시)</em></span>' +
-          '<input class="input" name="nickname" maxlength="12" placeholder="예: 유니" value="' + esc(p.nickname || '') + '"></label>' +
+          '<input class="input" name="nickname" maxlength="12" placeholder="예: 요요피" value="' + esc(p.nickname || '') + '"></label>' +
         '<button class="btn ghost sm" type="submit">닉네임 저장</button>' +
       '</form>' +
+      '<button class="btn outline block" data-act="open-round">🔄 다음 회차(' + (round + 1) + '차) 시작하기</button>' +
       (d.role === 'admin' ? '<button class="btn outline block" data-act="nav" data-route="admin">관리자 대시보드 열기</button>' : '') +
       '<button class="btn ghost block" data-act="signout">계정 전환 / 로그아웃</button>' +
-      '<p class="hint center">' + esc(Program.name) + ' · v' + esc(Program.version) + (d.authMode === 'demo' ? ' · 데모 모드' : '') + '</p>'
+      '<p class="hint center">' + esc(Program.name) + ' · v' + esc(Program.version) + '</p>'
+    );
+  }
+
+  /* 다음 회차 시작 확인 시트 — 지난 회차 보관 + 새 시작일 선택 */
+  function roundSheet(d) {
+    var p = d.participant || {};
+    var round = d.round || 1;
+    var next = round + 1;
+    var cur = d.current || {};
+    var keep = [];
+    if (p.nickname) keep.push('닉네임 ' + p.nickname);
+    if (d.gender === 'female') keep.push('생리주기 설정');
+    if (cur.latestWeight !== null && cur.latestWeight !== undefined) keep.push('최신 인바디(체중 ' + fmtNum(cur.latestWeight) + 'kg)');
+    return sheetWrap(
+      sheetHead('🔄 ' + next + '차 시작하기', '지금까지의 ' + M.roundLabel(round) + ' 기록은 보관되고 지워지지 않아요') +
+      '<div class="round-sheet-rows">' +
+        '<div class="round-row now"><span>이번 회차</span><b>' + esc(M.roundLabel(round)) + ' · ' + esc(M.fmtShort(cur.startDate || p.startDate) + ' ~ ' + M.fmtShort(cur.endDate || '')) + '</b></div>' +
+        '<div class="round-row"><span>기록</span><b>' + (cur.recorded || 0) + '일 · 달성률 ' + clampPct(cur.rate) + '%</b></div>' +
+        '<div class="round-row"><span>이어받기</span><b>' + esc(keep.length ? keep.join(' · ') : '설정 그대로') + '</b></div>' +
+      '</div>' +
+      '<form id="round-form" class="stack" autocomplete="off">' +
+        '<label class="field"><span>' + next + '차 시작일</span>' +
+          '<input class="input" type="date" name="startDate" value="' + esc(d.startDate || M.todayStr()) + '" aria-label="' + next + '차 시작일"></label>' +
+        '<label class="field"><span>' + next + '차 닉네임 <em class="hint">(바꾸려면 입력)</em></span>' +
+          '<input class="input" name="nickname" maxlength="12" value="' + esc(p.nickname || '') + '" placeholder="예: 요요피"></label>' +
+        '<button class="btn primary block" type="submit">' + next + '차 Day 1 시작하기</button>' +
+      '</form>' +
+      '<p class="hint center">' + esc(M.roundLabel(round)) + ' 결과는 최종 리포트의 회차 탭에서 언제든 다시 볼 수 있어요.</p>',
+      'small'
     );
   }
 
@@ -2110,6 +2229,8 @@
     promoSheet: promoSheet,
     addParticipantSheet: addParticipantSheet,
     profileSheet: profileSheet,
+    roundSheet: roundSheet,
+    roundCardBlock: roundCardBlock,
     photoSheet: photoSheet,
     photoGallery: photoGallery,
     confirmSheet: confirmSheet,

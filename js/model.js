@@ -1500,8 +1500,87 @@
     return /^https?:\/\/[^\s]+$/i.test(String(url || '').trim());
   }
 
+  /* ---------------- 회차 (1차 · 2차 · N차 누적) ----------------
+   * 28일을 한 회차로 보고, 회차를 마치면 지난 기록을 p.rounds 에 그대로 보관한다.
+   * 지금 진행 중인 회차는 늘 p.entries 를 쓰고, 회차 번호 = 보관된 회차 수 + 1. */
+  function roundsOf(p) {
+    return p && p.rounds && p.rounds.length ? p.rounds : [];
+  }
+
+  function roundNumber(p) {
+    return roundsOf(p).length + 1;
+  }
+
+  function roundLabel(n) {
+    return (Number(n) || 1) + '차';
+  }
+
+  /* n회차 기록을 지금 회차와 같은 모양의 참여자 객체로 돌려준다 (지난 회차 리포트·비교용) */
+  function roundAt(p, n) {
+    if (!p) return null;
+    var rounds = roundsOf(p);
+    var cur = rounds.length + 1;
+    var idx = Number(n) || cur;
+    if (idx === cur) return p;
+    var r = rounds[idx - 1];
+    if (!r) return null;
+    var s = {};
+    Object.keys(p).forEach(function (k) { if (k !== 'rounds') s[k] = p[k]; });
+    s.startDate = r.startDate;
+    s.entries = r.entries || {};
+    s.planOverrides = r.planOverrides || {};
+    s.feedback = r.feedback || [];
+    s.settings = Object.assign({}, p.settings || {}, r.settings || {});
+    s.round = idx;
+    s.archived = true;
+    return s;
+  }
+
+  /* 회차별 요약 — 리포트 회차 탭 · 누적 비교에 쓴다 */
+  function roundSummary(p, n, today) {
+    var sub = roundAt(p, n);
+    if (!sub) return null;
+    var cur = roundNumber(p);
+    var idx = Number(n) || cur;
+    var isCurrent = idx === cur;
+    var refToday = today || todayStr();
+    var startDate = sub.startDate || '';
+    var endDate = startDate ? dayDate(startDate, Program.totalDays) : '';
+    var rep = finalReport(sub, isCurrent ? refToday : endDate);
+    return {
+      round: idx,
+      label: roundLabel(idx),
+      startDate: startDate,
+      endDate: endDate,
+      current: isCurrent,
+      finished: isCurrent ? currentDay(p, refToday) >= Program.totalDays : true,
+      report: rep,
+      rate: rep.overall.rate,
+      recorded: rep.overall.recorded,
+      perfect: rep.overall.perfect,
+      weight: rep.inbody.changes.weight,
+      muscle: rep.inbody.changes.muscle,
+      fat: rep.inbody.changes.fat,
+      latestWeight: rep.inbody.latest && typeof rep.inbody.latest.weight === 'number' ? rep.inbody.latest.weight : null
+    };
+  }
+
+  /* 1차 ~ 지금 회차까지 요약 목록 */
+  function roundSummaries(p, today) {
+    var total = roundNumber(p);
+    var out = [];
+    for (var n = 1; n <= total; n++) out.push(roundSummary(p, n, today));
+    return out;
+  }
+
   global.App.Model = {
     pad2: pad2,
+    roundsOf: roundsOf,
+    roundNumber: roundNumber,
+    roundLabel: roundLabel,
+    roundAt: roundAt,
+    roundSummary: roundSummary,
+    roundSummaries: roundSummaries,
     todayStr: todayStr,
     parseDate: parseDate,
     addDays: addDays,

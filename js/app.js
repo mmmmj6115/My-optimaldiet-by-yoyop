@@ -37,6 +37,7 @@
     adminTab: 'participants',
     adminId: null,
     sheet: null,
+    reportRound: null,
     session: null,
     participant: null,
     participants: [],
@@ -125,6 +126,8 @@
       } catch (e) { /* 로그인 세션 복구 실패는 게이트로 안내 */ }
     }
     await reloadAll();
+    /* v15까지 개인 시작은 데모 참여자에 붙었으니, 내 기록으로 한 번 옮겨준다 */
+    try { await migrateLegacyPersonal(); } catch (e) { /* 이동 실패는 무시하고 그대로 연다 */ }
     parseRoute();
     /* 처음 접속(튜토리얼 미완료)이면 튜토리얼 탭이 먼저 열린다 */
     if (state.participant && !M.tutorialDone(state.participant) && state.route === 'today') state.route = 'tutorial';
@@ -278,6 +281,10 @@
       date: M.dayDate(p.startDate, day),
       isToday: day === cur,
       currentDay: curDay,
+      beforeStart: curDay === 0,
+      daysToStart: curDay === 0 ? Math.max(0, M.diffDays(M.todayStr(), M.dayDate(p.startDate, 1))) : 0,
+      startDate: M.dayDate(p.startDate, 1),
+      round: M.roundNumber(p),
       finished: curDay >= Program.totalDays,
       plan: plan,
       entry: entry,
@@ -312,8 +319,20 @@
       week: state.boardWeek,
       currentDay: M.currentDay(p, today()),
       overall: M.overallRate(p, today()),
+      round: M.roundNumber(p),
       weekly: M.weeklyMetrics(p, today())
     };
+  }
+
+  /* 시작일 미리보기 — 과거·오늘·미래를 모두 자연스러운 말로 */
+  function startPreviewText(startDate) {
+    if (!startDate || !M.isDateStr(startDate)) return '시작일을 골라주세요.';
+    var t = today();
+    var day = M.dayNumberFor(startDate, t);
+    if (day < 1) return M.fmtLong(startDate) + '부터 시작해요 · D-' + (1 - day) + ' (시작 전)';
+    if (day === 1) return '오늘(' + M.fmtLong(t) + ')이 Day 1이에요';
+    if (day > Program.totalDays) return M.fmtLong(startDate) + '에 시작한 기록이에요 · 28일이 이미 지났어요';
+    return M.fmtLong(startDate) + '에 시작했어요 · 오늘은 Day ' + day + ' (' + Math.ceil(day / 7) + '주차)';
   }
 
   /* 튜토리얼: 시작 인바디(Day 1) 값과 단백질 권장량 계산용 체중 */
@@ -328,12 +347,18 @@
     }
     var weight = pick('weight');
     var cs = M.cycleSettings(p);
+    var startDate = p.startDate || M.todayStr();
+    var round = M.roundNumber(p);
+    var history = M.roundSummaries(p, today()).filter(function (r) { return !r.current; });
     return {
       participant: p,
       nickname: p.nickname || '',
-      startDate: p.startDate || M.todayStr(),
+      startDate: startDate,
+      startPreview: startPreviewText(startDate),
       done: M.tutorialDone(p),
       currentDay: M.currentDay(p, today()),
+      round: round,
+      roundHistory: history,
       gender: cs.gender,
       cycle: { start: cs.cycleStart || '', length: cs.cycleLength, days: cs.periodDays },
       start: {
@@ -354,9 +379,101 @@
     };
   }
 
-  /* 28일 최종 리포트 데이터 */
-  function reportData() {
-    return { report: M.finalReport(state.participant, today()) };
+  /* 28일 최종 리포트 데이터 — 회차 탭·누적 비교 포함 */
+  function reportData(round) {
+    var p = state.participant;
+    if (!p) return { report: null, round: 1, total: 1, rounds: [] };
+    var total = M.roundNumber(p);
+    var viewed = Number(round) || Number(state.reportRound) || total;
+    if (viewed < 1 || viewed > total) viewed = total;
+    var rounds = M.roundSummaries(p, today());
+    var subject = M.roundAt(p, viewed);
+    var summary = rounds[viewed - 1] || null;
+    return {
+      report: summary ? summary.report : M.finalReport(subject, today()),
+      round: viewed,
+      total: total,
+      rounds: rounds,
+      subject: subject
+    };
+  }
+
+  /* ---------------- 회차 (1차 · 2차 · N차 누적) ---------------- */
+  function currentRoundSummary() {
+    var p = state.participant;
+    if (!p) return null;
+    return M.roundSummary(p, M.roundNumber(p), today());
+  }
+
+  function roundSheetData(s) {
+    var p = state.participant || {};
+    var cs = M.cycleSettings(p);
+    return {
+      participant: p,
+      round: M.roundNumber(p),
+      current: currentRoundSummary() || {},
+      gender: cs.gender,
+      startDate: (s && s.startDate) || today()
+    };
+  }
+
+  function openRoundSheet() {
+    if (!state.participant) return;
+    openSheet({ type: 'round', startDate: today() });
+  }
+
+  /* 지금 회차를 보관하고 다음 회차 Day 1을 시작한다 (기록은 지우지 않는다) */
+  async function startNextRound(form) {
+    var p = state.participant;
+    if (!p) return false;
+    var els = form && form.elements;
+    var rawDate = els && els.namedItem('startDate') ? String(els.namedItem('startDate').value || '').trim() : '';
+    var startDate = rawDate || today();
+    if (!M.isDateStr(startDate)) { toast('시작일을 날짜로 넣어주세요', 'error'); return false; }
+    var nickEl = els && els.namedItem('nickname');
+    var nick = nickEl ? String(nickEl.value || '').trim().slice(0, 12) : '';
+    var n = M.roundNumber(p);
+    try {
+      var rounds = (p.rounds || []).slice();
+      rounds.push({
+        round: n,
+        startDate: p.startDate,
+        endDate: M.dayDate(p.startDate, Program.totalDays),
+        entries: JSON.parse(JSON.stringify(p.entries || {})),
+        planOverrides: JSON.parse(JSON.stringify(p.planOverrides || {})),
+        feedback: JSON.parse(JSON.stringify(p.feedback || [])),
+        archivedAt: new Date().toISOString()
+      });
+      /* 이어받기: 닉네임·성별·생리주기 + 직전 최신 인바디. Day 기준 타이머 값은 새로 시작 */
+      var settings = Object.assign({}, p.settings || {});
+      delete settings.fastStarts;
+      delete settings.fastPrevMeal;
+      delete settings.lastMeals;
+      var entries = {};
+      var latest = M.latestValues(p, Program.totalDays, ['weight', 'muscle', 'fat', 'visceral']);
+      var carried = {};
+      ['weight', 'muscle', 'fat', 'visceral'].forEach(function (k) {
+        if (latest[k] && typeof latest[k].value === 'number') carried[k] = latest[k].value;
+      });
+      if (Object.keys(carried).length) {
+        entries['1'] = { date: M.dayDate(startDate, 1), meals: {}, supplements: {}, exercise: {}, updatedAt: new Date().toISOString() };
+        Object.keys(carried).forEach(function (k) { entries['1'][k] = carried[k]; });
+      }
+      var patch = { rounds: rounds, startDate: startDate, entries: entries, planOverrides: {}, feedback: [], settings: settings };
+      if (nick && nick !== p.nickname) { patch.nickname = nick; if (!p.name) patch.name = nick; }
+      var updated = await store.updateParticipant(p.id, patch);
+      applyParticipant(updated);
+      state.day = null;
+      state.reportRound = null;
+      closeSheet();
+      go('today');
+      render();
+      toast(M.roundLabel(n) + ' 기록을 보관하고 ' + M.roundLabel(n + 1) + ' Day 1을 시작했어요');
+      return true;
+    } catch (e) {
+      toast('회차를 시작하지 못했어요: ' + e.message, 'error');
+      return false;
+    }
   }
 
   function adminData() {
@@ -424,14 +541,18 @@
     } else if (s.type === 'promo') {
       html = Views.promoSheet({ promo: s.promo, isNew: s.isNew });
     } else if (s.type === 'report') {
-      html = Views.report(reportData());
+      html = Views.report(reportData(s.round));
+    } else if (s.type === 'round') {
+      html = Views.roundSheet(roundSheetData(s));
     } else if (s.type === 'add') {
       html = Views.addParticipantSheet();
     } else if (s.type === 'profile') {
+      var pp = state.participant;
       html = Views.profileSheet({
-        participant: state.participant,
-        currentDay: M.currentDay(state.participant, today()),
-        rate: M.overallRate(state.participant, today()),
+        participant: pp,
+        currentDay: M.currentDay(pp, today()),
+        rate: M.overallRate(pp, today()),
+        round: M.roundNumber(pp),
         provider: state.session ? state.session.provider : 'demo',
         role: state.session ? state.session.role : 'participant',
         authMode: CFG.authMode
@@ -1098,11 +1219,10 @@
     var data = { metrics: {} };
     var err = '';
     if (raw.nickname !== undefined) data.nickname = raw.nickname.slice(0, 12);
-    /* 시작일 — 비우면 기존 시작일을 그대로 쓴다. 오늘 이후는 받지 않는다 */
+    /* 시작일 — 비우면 기존 시작일을 그대로 쓴다. 과거·미래 모두 고를 수 있다 (미래면 시작 전(D-N)으로 보인다) */
     if (raw.startDate !== undefined && raw.startDate !== null && String(raw.startDate).trim() !== '') {
       var sdt = String(raw.startDate).trim();
       if (!M.isDateStr(sdt)) { if (!err) err = '시작일을 날짜로 넣어주세요'; }
-      else if (sdt > M.todayStr()) { if (!err) err = '시작일은 오늘까지만 고를 수 있어요'; }
       else data.startDate = sdt;
     }
     [['weight', '시작 체중'], ['muscle', '골격근량'], ['fat', '체지방량']].forEach(function (pair) {
@@ -1155,7 +1275,11 @@
     try {
       var updated = null;
       var patch = {};
-      if (data.nickname !== undefined && data.nickname !== p.nickname) patch.nickname = data.nickname;
+      if (data.nickname !== undefined && data.nickname !== p.nickname) {
+        patch.nickname = data.nickname;
+        /* 이름 없이 시작한 내 기록은 닉네임을 이름으로도 써 둔다 (목록·CSV 표기용) */
+        if (!p.name && data.nickname) patch.name = data.nickname;
+      }
       if (data.startDate && data.startDate !== p.startDate) patch.startDate = data.startDate;
       if (Object.keys(patch).length) updated = await store.updateParticipant(p.id, patch);
       var metrics = data.metrics || {};
@@ -1198,7 +1322,9 @@
       state.day = M.currentDay(state.participant, today()) || 1;
       go('today');
       render();
-      toast('입력 저장 완료! 1일차를 시작해요 🎉');
+      toast(M.currentDay(state.participant, today()) > 0
+        ? '입력 저장 완료! Day ' + M.currentDay(state.participant, today()) + '을 이어가요 🎉'
+        : '입력 저장 완료! ' + M.fmtLong(M.dayDate(state.participant.startDate, 1)) + '부터 시작해요 🎉');
       return true;
     } catch (e) {
       toast('저장하지 못했어요: ' + e.message, 'error');
@@ -1285,14 +1411,16 @@
     if (!p) return;
     var Rep = global.App.Report;
     var url = null;
+    var data = null;
     try {
-      url = Rep && Rep.toDataURL ? Rep.toDataURL(M.finalReport(p, today())) : null;
+      data = reportData(state.sheet && state.sheet.round);
+      url = Rep && Rep.toDataURL ? Rep.toDataURL(data.report) : null;
     } catch (e) { url = null; }
     if (!url) {
       toast('이 브라우저에서는 이미지 저장을 지원하지 않아요. 화면을 캡처해 주세요.', 'error');
       return;
     }
-    var name = '마이옵티멀다이어트_28일최종리포트_' + today() + '.png';
+    var name = '마이옵티멀다이어트_' + (data && data.total > 1 ? M.roundLabel(data.round) + '_' : '') + '28일최종리포트_' + today() + '.png';
     downloadUrl(name, url);
     toast('리포트 이미지를 저장했어요 · ' + name);
   }
@@ -1348,13 +1476,58 @@
   }
 
   async function demoLogin() {
-    var p = await store.findByCode(CFG.demo.participantCode);
+    /* '내 28일 기록 시작하기' — 데모 참여자(김유니)가 아니라 이 기기의 내 기록을 연다 */
+    var p = null;
+    try { p = await store.getPersonal(); } catch (e) { p = null; }
     if (!p) {
-      toast('데모 참여자를 찾지 못했어요. 데모 데이터를 초기화해주세요.', 'error');
-      return;
+      p = await store.createParticipant({ name: '', nickname: '', startDate: today(), personal: true });
+      state.participants = await store.listParticipants();
     }
     var session = Auth.signInDemo(p.id);
     await startWith(p, session, '내 28일 기록을 열었어요');
+  }
+
+  /* v15까지 '내 28일 기록 시작하기'는 데모 참여자(김유니)에 붙어 샘플 체크 기록이 섞였다.
+   * v16부터는 그 세션을 '내 기록'으로 옮기고, 직접 넣은 인바디 수치만 이어받는다.
+   * 데모 참여자(김유니)는 관리자·참여코드용으로 그대로 둔다. */
+  async function migrateLegacyPersonal() {
+    var s = state.session;
+    if (!s || s.provider !== 'demo' || !s.participantId) return;
+    var old = participantById(s.participantId);
+    if (!old || old.personal) return;
+    var demoCode = String((CFG.demo && CFG.demo.participantCode) || '');
+    if (!demoCode || String(old.code || '') !== demoCode) return;
+    if (await store.getPersonal()) return;
+    var seedNick = (global.App.Seed && global.App.Seed.demoDefaults && global.App.Seed.demoDefaults.nickname) || '';
+    var nick = old.nickname && old.nickname !== old.name && old.nickname !== seedNick ? old.nickname : '';
+    var settings = Object.assign({}, old.settings || {});
+    delete settings.fastStarts;
+    delete settings.fastPrevMeal;
+    delete settings.lastMeals;
+    try {
+      var created = await store.createParticipant({
+        name: nick, nickname: nick, startDate: old.startDate || today(), personal: true, settings: settings
+      });
+      /* 인바디 수치만 이어받되, 아직 안 바꾼 샘플 수치는 가져오지 않는다 */
+      var sample = (global.App.Seed && global.App.Seed.demoDefaults && global.App.Seed.demoDefaults.sample) || {};
+      var latest = M.latestValues(old, Program.totalDays, ['weight', 'muscle', 'fat', 'visceral']);
+      var carried = {};
+      ['weight', 'muscle', 'fat', 'visceral'].forEach(function (k) {
+        var lv = latest[k];
+        if (!lv || typeof lv.value !== 'number') return;
+        if (typeof sample[k] === 'number' && Math.abs(lv.value - sample[k]) < 0.001) return;
+        carried[k] = lv.value;
+      });
+      if (Object.keys(carried).length) {
+        var entry = { date: M.dayDate(created.startDate, 1), meals: {}, supplements: {}, exercise: {}, updatedAt: new Date().toISOString() };
+        Object.keys(carried).forEach(function (k) { entry[k] = carried[k]; });
+        created = await store.putEntry(created.id, 1, entry);
+      }
+      state.session = Auth.signInDemo(created.id);
+      state.participants = await store.listParticipants();
+      state.participant = created;
+      toast('내 기록으로 정리했어요 · 샘플 체크는 지우고 내 인바디는 그대로 이어받았어요');
+    } catch (e) { /* 정리에 실패해도 앱은 그대로 연다 */ }
   }
 
   /* 관리자 로그인: 코드가 맞을 때만 관리자 세션을 만든다 (원클릭 체험 버튼 없음) */
@@ -1444,6 +1617,28 @@
         break;
       }
       case 'open-profile': openSheet({ type: 'profile' }); break;
+      case 'open-round': openRoundSheet(); break;
+      case 'report-round': {
+        var rn = Number(el.getAttribute('data-round'));
+        if (!rn) return;
+        state.reportRound = rn;
+        if (state.sheet && state.sheet.type === 'report') state.sheet.round = rn;
+        render();
+        break;
+      }
+      case 'tut-start': {
+        var off = Number(el.getAttribute('data-offset')) || 0;
+        var input = global.document.getElementById('tut-start-date');
+        if (input) {
+          input.value = M.addDays(today(), off);
+          updateStartPreview(input.value);
+          var bts = global.document.querySelectorAll ? global.document.querySelectorAll('[data-act="tut-start"]') : [];
+          Array.prototype.forEach.call(bts, function (b) {
+            if (b.classList) b.classList.toggle('on', Number(b.getAttribute('data-offset')) === off);
+          });
+        }
+        break;
+      }
       case 'signout': await signOut(); break;
       case 'tutorial-start': await saveTutorial(global.document.getElementById('tutorial-form'), true); break;
       case 'tut-gender': setTutorialGender(el.getAttribute('data-value')); break;
@@ -1822,11 +2017,22 @@
   }
 
   /* ---------------- 변경/입력 처리 ---------------- */
+  /* 시작일 미리보기 문구를 화면에서 바로 갱신 */
+  function updateStartPreview(value) {
+    var el = global.document.getElementById('tut-start-preview');
+    if (el) el.textContent = startPreviewText(value);
+  }
+
   async function onChange(e) {
     var el = e.target;
 
     if (el.matches && el.matches('[data-photo]')) {
       await handlePhotoInput(el);
+      return;
+    }
+
+    if (el.matches && el.matches('[data-tut="startDate"]')) {
+      updateStartPreview(el.value);
       return;
     }
 
@@ -1952,11 +2158,19 @@
       return;
     }
 
+    if (form.id === 'round-form') {
+      await startNextRound(form);
+      return;
+    }
+
     if (form.id === 'profile-form') {
       var pn = form.elements.namedItem('nickname');
       var pnick = pn ? String(pn.value || '').trim().slice(0, 12) : '';
+      var ptarget = participantById(form.getAttribute('data-id')) || state.participant;
+      var nickPatch = { nickname: pnick };
+      if (!ptarget.name && pnick) nickPatch.name = pnick;
       try {
-        var pu = await store.updateParticipant(form.getAttribute('data-id') || state.participant.id, { nickname: pnick });
+        var pu = await store.updateParticipant(form.getAttribute('data-id') || state.participant.id, nickPatch);
         applyParticipant(pu);
         closeSheet();
         render();
