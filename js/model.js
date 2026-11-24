@@ -191,12 +191,44 @@
     return out;
   }
 
-  /* 24시간 단식의 기준 시각: 이 날 직접 지정 → 전날 기록(entry.lastMealAt / 전날 타이머 시각)
+  /* 전날 화면에서 '단식 시작하기'를 눌러 저장한 그 단식일의 시작 시각 (settings.fastStarts[단식일]) */
+  function fastStartOf(participant, dayNumber) {
+    var s = (participant && participant.settings) || {};
+    var d = Number(dayNumber) || 0;
+    var map = s.fastStarts;
+    if (!d || !map || typeof map !== 'object') return null;
+    return hmToMinutes(map[String(d)]) !== null ? normHM(map[String(d)], '') : null;
+  }
+
+  /* 이 날이 단식일 전날인가 — 전날 화면의 '단식 시작하기' 버튼 정보 */
+  function prevFastInfo(participant, dayNumber, today) {
+    var p = participant || {};
+    var d = Number(dayNumber) || 0;
+    var next = d + 1;
+    if (!d || !p.startDate || next > Program.totalDays) return null;
+    if (!isFastDay(getPlan(p, next))) return null;
+    var start = fastStartOf(p, next);
+    /* 보는 날이 '오늘'이고 다음 날이 단식일이면 '내일 단식일'로 부른다 */
+    var isTomorrow = d === currentDay(p, today || todayStr());
+    return {
+      day: next,
+      date: dayDate(p.startDate, next),
+      start: start,
+      isSet: !!start,
+      isTomorrow: isTomorrow,
+      label: isTomorrow ? '내일 단식일' : 'Day ' + next + ' 단식일'
+    };
+  }
+
+  /* 24시간 단식의 기준 시각: 전날 화면에서 누른 '단식 시작하기'(fastStarts)
+   * → 이 날 직접 지정 → 전날 기록(entry.lastMealAt / 전날 타이머 시각)
    * → 설정값(settings.fastingPrevMealAt) → 기본 18:00 */
   function fastPrevMeal(participant, dayNumber) {
     var p = participant || {};
     var d = Number(dayNumber) || 1;
     var s = p.settings || {};
+    var started = fastStartOf(p, d);
+    if (started) return { hm: started, source: 'start', sourceDay: d - 1 };
     var manual = s.fastPrevMeal && typeof s.fastPrevMeal === 'object' ? s.fastPrevMeal[String(d)] : null;
     if (hmToMinutes(manual) !== null) return { hm: normHM(manual, FAST_PREV_DEFAULT), source: 'manual', sourceDay: null };
     var prev = getEntry(p, d - 1);
@@ -253,6 +285,7 @@
       heldFullShortText: minutesText(Math.max(0, targetMin - held)),
       prevMeal: base.hm,
       source: base.source,
+      fromStart: base.source === 'start',
       sourceDay: base.sourceDay,
       start: start,
       end: end,
@@ -277,6 +310,14 @@
       minLeftText: minutesText(Math.max(minMin - elapsedMin, 0)),
       minPct: Math.max(0, Math.min(100, Math.round((elapsedMin / minMin) * 100)))
     };
+  }
+
+  /* 단식일 24시간 창 설명 — '전날 13:20 단식 시작 → 오늘 13:20까지 (24시간)' */
+  function fast24Caption(s) {
+    if (!s) return '';
+    var how = s.source === 'start' ? ' 단식 시작' : ' 마지막 식사';
+    return (s.isViewToday ? '전날 ' : fmtShort(s.startDate) + ' ') + s.startClock + how + ' → ' +
+      (s.isViewToday ? '오늘 ' : fmtShort(s.endDate) + ' ') + s.endClock + '까지 (' + s.hours + '시간)';
   }
 
   function round1(v) { return Math.round(v * 10) / 10; }
@@ -1036,7 +1077,10 @@
     fastPlanFor: fastPlanFor,
     weekFastDays: weekFastDays,
     fastPrevMeal: fastPrevMeal,
+    fastStartOf: fastStartOf,
+    prevFastInfo: prevFastInfo,
     fast24State: fast24State,
+    fast24Caption: fast24Caption,
     fastConflict: fastConflict,
     dayItems: dayItems,
     dayStatus: dayStatus,

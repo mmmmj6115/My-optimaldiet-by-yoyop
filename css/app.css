@@ -300,6 +300,22 @@ h1, h2, h3, p { margin: 0; }
 .timer-card.fast24 .tc-sub { background: #E7F6EE; color: #1B6B50; }
 .timer-card.fast24 .tc-cap { color: #1B6B50; }
 .fast-move-btn { margin-top: 10px; }
+/* 단식일 전날: '단식 시작하기' */
+.fast-start {
+  margin-top: 10px; padding: 10px 11px; border: 1px solid #F0D9B8; border-radius: 13px;
+  background: #FFFCF5;
+}
+.fast-start.on { background: #F2FBF6; border-color: #CBEBDC; }
+.fs-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.fs-head b { font-size: 11.5px; font-weight: 800; color: #A8632F; }
+.fs-tag { font-size: 10px; font-weight: 800; color: #fff; background: #E09A4E; border-radius: 6px; padding: 2px 6px; }
+.fast-start.on .fs-tag { background: var(--brand); }
+.fast-start.on .fs-head b { color: #1B6B50; }
+.fs-state { margin-top: 6px; font-size: 13px; font-weight: 700; color: #1B6B50; }
+.fs-state b { font-size: 17px; font-weight: 800; letter-spacing: -.03em; }
+.fs-sub { margin-top: 4px; font-size: 10.5px; color: var(--muted); line-height: 1.45; word-break: keep-all; }
+.fs-btn { margin-top: 8px; min-height: 44px; font-size: 13.5px; }
+.fs-cancel { margin-top: 8px; font-size: 11px; color: var(--muted); }
 .daynav-fast { display: flex; align-items: center; justify-content: center; gap: 8px; margin: -2px 0 10px; }
 .daynav-tag { font-size: 10.5px; font-weight: 800; color: #A8632F; background: #FDF0DF; border-radius: 7px; padding: 3px 7px; }
 .daynav-tag.off { color: #5E7A6D; background: #EFF4F1; }

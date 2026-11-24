@@ -288,6 +288,7 @@
       fasting: M.fastingDayState(p, day, now, Program.check.fastingHours),
       fast24: M.fast24State(p, day, now, Program.check.fast24Hours),
       fastPrev: M.fastPrevMeal(p, day),
+      prevFast: M.prevFastInfo(p, day, today()),
       sleep: M.sleepState(prefs.wake, now, Program.check.sleepHours),
       dinner: M.dinnerDayState(p, day, now, M.dinnerMode(p, day)),
       quote: M.quoteFor(day),
@@ -706,7 +707,8 @@
   }
 
   /* 단식일 24시간 타이머의 기준 시각(전날 마지막 식사)은 그 날짜에만 적용해 저장한다 */
-  async function saveFastPrevMeal(value) {    var p = state.participant;
+  async function saveFastPrevMeal(value) {
+    var p = state.participant;
     if (!p) return;
     var norm = M.normHM(value, '');
     if (!norm) { toast('시각을 확인해주세요', 'error'); return; }
@@ -714,6 +716,11 @@
     var settings = Object.assign({}, p.settings || {});
     settings.fastPrevMeal = Object.assign({}, (settings.fastPrevMeal && typeof settings.fastPrevMeal === 'object') ? settings.fastPrevMeal : {});
     settings.fastPrevMeal[String(day)] = norm;
+    /* 전날 '단식 시작하기'로 시작한 날이면 그 시작 시각을 같이 고쳐야 화면과 계산이 맞는다 */
+    if (M.fastStartOf(p, day)) {
+      settings.fastStarts = Object.assign({}, (settings.fastStarts && typeof settings.fastStarts === 'object') ? settings.fastStarts : {});
+      settings.fastStarts[String(day)] = norm;
+    }
     settings.fastingPrevMealAt = norm;
     try {
       var updated = await store.updateParticipant(p.id, { settings: settings });
@@ -724,6 +731,88 @@
     } catch (e) {
       toast('저장하지 못했어요: ' + e.message, 'error');
     }
+  }
+
+  /* ---------- 단식일 전날 '단식 시작하기' ---------- */
+  /* 누른 순간의 시각을 그 단식일의 시작 시각으로 저장한다 (settings.fastStarts[단식일]) */
+  async function writeFastStart(day, hm) {
+    var p = state.participant;
+    if (!p || !day) return false;
+    var norm = M.normHM(hm, '');
+    if (!norm) { toast('시각을 확인해주세요', 'error'); return false; }
+    var settings = Object.assign({}, p.settings || {});
+    settings.fastStarts = Object.assign({}, (settings.fastStarts && typeof settings.fastStarts === 'object') ? settings.fastStarts : {});
+    settings.fastStarts[String(day)] = norm;
+    try {
+      var updated = await store.updateParticipant(p.id, { settings: settings });
+      applyParticipant(updated);
+      render();
+      tickTimers();
+      return true;
+    } catch (e) {
+      toast('저장하지 못했어요: ' + e.message, 'error');
+      return false;
+    }
+  }
+
+  async function startFastNow(dayAttr) {
+    var p = state.participant;
+    if (!p) return;
+    var day = Number(dayAttr) || (viewDay() + 1);
+    var hm = M.clockOf(new Date());
+    if (!(await writeFastStart(day, hm))) return;
+    var nextDate = M.dayDate(p.startDate, day);
+    toast(hm + '부터 단식 시작! · ' + M.fmtShort(nextDate) + ' ' + hm + '까지 24시간이에요 ⏱️');
+  }
+
+  async function saveFastStart(dayAttr, value) {
+    var day = Number(dayAttr) || (viewDay() + 1);
+    var norm = M.normHM(value, '');
+    if (!norm) { toast('시각을 확인해주세요', 'error'); return; }
+    if (!(await writeFastStart(day, norm))) return;
+    toast('Day ' + day + ' 단식 시작을 ' + norm + '으로 저장했어요');
+  }
+
+  async function cancelFastStart(dayAttr) {
+    var p = state.participant;
+    if (!p) return;
+    var day = Number(dayAttr) || (viewDay() + 1);
+    var settings = Object.assign({}, p.settings || {});
+    if (!settings.fastStarts || typeof settings.fastStarts !== 'object') return;
+    if (!Object.prototype.hasOwnProperty.call(settings.fastStarts, String(day))) return;
+    settings.fastStarts = Object.assign({}, settings.fastStarts);
+    delete settings.fastStarts[String(day)];
+    try {
+      var updated = await store.updateParticipant(p.id, { settings: settings });
+      applyParticipant(updated);
+      render();
+      tickTimers();
+      toast('Day ' + day + ' 단식 시작을 취소했어요 · 전날 기록 시각으로 계산해요');
+    } catch (e) {
+      toast('저장하지 못했어요: ' + e.message, 'error');
+    }
+  }
+
+  /* 단식일이 아닌 날에 남은 '단식 시작' 시각을 정리한다 (단식일을 옮기거나 해제했을 때) */
+  async function pruneFastStarts() {
+    var p = state.participant;
+    if (!p) return;
+    var map = p.settings && p.settings.fastStarts;
+    if (!map || typeof map !== 'object') return;
+    var next = {};
+    var changed = false;
+    Object.keys(map).forEach(function (k) {
+      var d = Number(k);
+      if (d && M.isFastDay(M.getPlan(p, d))) next[k] = map[k];
+      else changed = true;
+    });
+    if (!changed) return;
+    var settings = Object.assign({}, p.settings || {});
+    settings.fastStarts = next;
+    try {
+      var updated = await store.updateParticipant(p.id, { settings: settings });
+      applyParticipant(updated);
+    } catch (e) { /* 정리는 실패해도 화면 흐름은 계속 */ }
   }
 
   /* ---------- 실시간 타이머 (1초마다) ---------- */
@@ -794,8 +883,7 @@
       pct = Math.max(0, Math.min(100, Math.round((s.heldMinutes / (s.hours * 60)) * 100)));
       elapsedText = s.heldText;
     } else {
-      cap = (s.isViewToday ? '전날 ' : M.fmtShort(s.startDate) + ' ') + s.startClock + ' 마지막 식사 → ' +
-        (s.isViewToday ? '오늘 ' : M.fmtShort(s.endDate) + ' ') + s.endClock + '까지 (' + s.hours + '시간)';
+      cap = M.fast24Caption(s);
       val = (s.done && s.isPast)
         ? '<span class="big-num">' + s.hours + '시간 창이 끝났어요</span>'
         : (s.done
@@ -950,6 +1038,7 @@
       if (updated) applyParticipant(updated);
       closeSheet();
       state.day = toDay || fromDay;
+      await pruneFastStarts();
       go('today');
       render();
       if (toDay) {
@@ -1063,6 +1152,7 @@
       var updated = await store.setPlanOverride(p.id, day, same ? null : draft);
       applyParticipant(updated);
       closeSheet();
+      await pruneFastStarts();
       toast(same ? '기본 식단으로 되돌렸어요' : 'Day ' + day + ' 식단을 저장했어요');
       render();
     } catch (e) {
@@ -1337,6 +1427,14 @@
       }
       case 'check-dinner': {
         await toggleMealClock('dinner');
+        break;
+      }
+      case 'fast-start-now': {
+        await startFastNow(el.getAttribute('data-day'));
+        break;
+      }
+      case 'fast-start-cancel': {
+        await cancelFastStart(el.getAttribute('data-day'));
         break;
       }
       case 'dinner-mode': {
@@ -1633,6 +1731,10 @@
     }
     if (field === 'fastPrevMeal') {
       await saveFastPrevMeal(el.value);
+      return;
+    }
+    if (field === 'fastStart') {
+      await saveFastStart(el.getAttribute('data-day'), el.value);
       return;
     }
     if (field === 'questTime') {

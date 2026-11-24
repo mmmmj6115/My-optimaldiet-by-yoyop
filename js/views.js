@@ -404,6 +404,25 @@
         : '');
   }
 
+  /* 단식일 전날 카드 — '단식 시작하기' 버튼 · 저장된 시작 시각 · 취소 */
+  function fastStartBlock(pf) {
+    if (!pf) return '';
+    var head = '<div class="fs-head"><span class="fs-tag">' + esc(pf.label) + '</span>' +
+      '<b>Day ' + pf.day + ' · ' + esc(M.fmtLong(pf.date)) + '</b></div>';
+    if (pf.isSet) {
+      return '<div class="fast-start on" id="fast-start">' + head +
+        '<p class="fs-state" id="fs-state">⏱️ <b>' + esc(pf.start) + '</b>부터 단식 시작됨</p>' +
+        '<p class="fs-sub">' + esc(pf.start) + ' 시작 → ' + esc(pf.isTomorrow ? '내일 ' : 'Day ' + pf.day + ' ') + esc(pf.start) + '까지 24시간 단식이에요.</p>' +
+        '<label class="time-row"><span>단식 시작 시각</span><input type="time" data-field="fastStart" data-day="' + pf.day + '" value="' + esc(pf.start) + '" aria-label="단식 시작 시각"></label>' +
+        '<button class="link-btn fs-cancel" data-act="fast-start-cancel" data-day="' + pf.day + '">단식 시작 취소</button>' +
+        '</div>';
+    }
+    return '<div class="fast-start" id="fast-start">' + head +
+      '<p class="fs-sub">지금 누르면 그 시각부터 ' + esc(pf.isTomorrow ? '내일 ' : 'Day ' + pf.day + ' ') + '같은 시각까지 24시간 단식이 돼요.</p>' +
+      '<button class="btn primary block fs-btn" data-act="fast-start-now" data-day="' + pf.day + '" aria-label="' + esc(pf.label) + ' · 단식 시작하기">⏱️ ' + esc(pf.label) + ' · 단식 시작하기</button>' +
+      '</div>';
+  }
+
   function timerCardFasting(d) {
     var f = d.fasting;
     if (!f) return '';
@@ -443,6 +462,7 @@
         hint: '누르면 지금 시각을 아침 식사로 저장해요'
       }) +
       '<label class="time-row"><span>공복 시작 · 마지막 식사</span><input type="time" data-field="lastMeal" value="' + esc(f.startClock) + '" aria-label="전날 마지막 식사 시각"></label>' +
+      fastStartBlock(d.prevFast) +
     '</article>';
   }
 
@@ -461,8 +481,7 @@
           ? s.minHours + '시간 최소 기준 통과 ✓ · ' + s.hours + '시간까지 ' + esc(s.heldFullShortText) + ' 남았어요'
           : s.minHours + '시간 최소 기준까지 ' + esc(s.heldMinShortText) + ' 남았어요');
     } else {
-      cap = (s.isViewToday ? '전날 ' : M.fmtShort(s.startDate) + ' ') + s.startClock + ' 마지막 식사 → ' +
-        (s.isViewToday ? '오늘 ' : M.fmtShort(s.endDate) + ' ') + s.endClock + '까지 (' + s.hours + '시간)';
+      cap = M.fast24Caption(s);
       if (s.done && s.isPast) val = '<span class="big-num">' + s.hours + '시간 창이 끝났어요</span>';
       else if (s.done) val = '<span class="big-num">' + s.hours + '시간 단식 달성!</span> 🏆';
       else if (s.beforeStart) val = '<span class="big-num">' + s.startClock + '</span> <em>부터 시작해요</em>';
@@ -476,7 +495,8 @@
     }
     var pct = s.mealChecked ? Math.max(0, Math.min(100, Math.round((s.heldMinutes / (s.hours * 60)) * 100))) : s.pct;
     var elapsedText = s.mealChecked ? s.heldText : s.elapsedText;
-    var srcText = s.source === 'prev' ? '전날(Day ' + (s.day - 1) + ') 기록에서 가져왔어요'
+    var srcText = s.source === 'start' ? '전날 \'단식 시작하기\'로 저장한 시각이에요 · 여기서 고쳐도 이 값이 기준이 돼요'
+      : s.source === 'prev' ? '전날(Day ' + (s.day - 1) + ') 기록에서 가져왔어요'
       : s.source === 'manual' ? '직접 고친 시각이에요'
       : s.source === 'settings' ? '설정한 시각을 쓰고 있어요'
       : '기본값 ' + s.prevMeal + ' · 전날 기록이 있으면 자동으로 맞춰져요';
@@ -848,6 +868,7 @@
       '<dl class="wk-brief-rows">' + rows.map(function (r) {
         return r[1] ? '<div><dt>' + r[0] + '</dt><dd>' + esc(r[1]) + '</dd></div>' : '';
       }).join('') + '</dl>' +
+      (p.riceNote ? '<p class="note-line wk-rice-line">' + esc(p.riceNote) + '</p>' : '') +
     '</div>';
   }
 
@@ -909,7 +930,7 @@
         list: d13, week: 1, gridCls: 'span3'
       });
       body += boardBlock({
-        title: '4~7일차 · 1주차', subtitle: 'D4~7 · 단백질 중심 유지 · 현미 점심 도입',
+        title: '4~7일차 · 1주차', subtitle: 'D4~7 · 단백질 중심 유지 · 점심 밥 2/3공기',
         briefs: [Program.w1Plan], food: { allow: Program.w1Plan.chips, avoid: Program.w1Plan.forbiddenChips },
         list: d47, week: 1, gridCls: 'span4'
       });
@@ -927,7 +948,7 @@
         list: d13, week: 1, gridCls: 'span3 big', cards: true
       });
       body += boardBlock({
-        title: '4~7일차 · 1주차', subtitle: 'D4~7 · 단백질 중심 유지 · 현미 점심 도입',
+        title: '4~7일차 · 1주차', subtitle: 'D4~7 · 단백질 중심 유지 · 점심 밥 2/3공기',
         briefs: [Program.w1Plan], food: { allow: Program.w1Plan.chips, avoid: Program.w1Plan.forbiddenChips },
         list: d47, week: 1, gridCls: 'span4 big', cards: true
       });
@@ -1280,6 +1301,7 @@
         return '<div class="tut-period">' +
           '<div class="tut-period-head"><span class="wk-badge">' + esc(p.badge) + '</span><b>' + esc(p.title) + '</b><small>' + esc(note) + '</small></div>' +
           '<div class="tut-chips">' + chips.map(function (c) { return foodChipHTML(c.e, c.t, 'ok'); }).join('') + '</div>' +
+          (p.riceNote ? '<p class="note-line">' + esc(p.riceNote) + '</p>' : '') +
         '</div>';
       }).join('') +
     '</section>';
