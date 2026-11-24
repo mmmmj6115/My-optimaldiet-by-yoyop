@@ -269,6 +269,7 @@
     });
     var prefs = M.timerPrefs(p);
     var now = new Date();
+    var curDay = M.currentDay(p, today());
     return {
       participant: p,
       nickname: p.nickname || p.name,
@@ -276,6 +277,8 @@
       week: Math.ceil(day / 7),
       date: M.dayDate(p.startDate, day),
       isToday: day === cur,
+      currentDay: curDay,
+      finished: curDay >= Program.totalDays,
       plan: plan,
       entry: entry,
       score: score,
@@ -328,6 +331,7 @@
     return {
       participant: p,
       nickname: p.nickname || '',
+      startDate: p.startDate || M.todayStr(),
       done: M.tutorialDone(p),
       currentDay: M.currentDay(p, today()),
       gender: cs.gender,
@@ -348,6 +352,11 @@
       type: state.promoType,
       category: state.promoCat
     };
+  }
+
+  /* 28일 최종 리포트 데이터 */
+  function reportData() {
+    return { report: M.finalReport(state.participant, today()) };
   }
 
   function adminData() {
@@ -414,6 +423,8 @@
       html = Views.fastMoveSheet(fastMoveData(s.week, s.fromDay));
     } else if (s.type === 'promo') {
       html = Views.promoSheet({ promo: s.promo, isNew: s.isNew });
+    } else if (s.type === 'report') {
+      html = Views.report(reportData());
     } else if (s.type === 'add') {
       html = Views.addParticipantSheet();
     } else if (s.type === 'profile') {
@@ -1077,7 +1088,7 @@
       return String(el.value).trim();
     }
     return {
-      nickname: val('nickname'), weight: val('weight'), muscle: val('muscle'), fat: val('fat'), visceral: val('visceral'),
+      nickname: val('nickname'), startDate: val('startDate'), weight: val('weight'), muscle: val('muscle'), fat: val('fat'), visceral: val('visceral'),
       gender: val('gender'), cycleStart: val('cycleStart'), cycleLength: val('cycleLength'), periodDays: val('periodDays')
     };
   }
@@ -1087,6 +1098,13 @@
     var data = { metrics: {} };
     var err = '';
     if (raw.nickname !== undefined) data.nickname = raw.nickname.slice(0, 12);
+    /* 시작일 — 비우면 기존 시작일을 그대로 쓴다. 오늘 이후는 받지 않는다 */
+    if (raw.startDate !== undefined && raw.startDate !== null && String(raw.startDate).trim() !== '') {
+      var sdt = String(raw.startDate).trim();
+      if (!M.isDateStr(sdt)) { if (!err) err = '시작일을 날짜로 넣어주세요'; }
+      else if (sdt > M.todayStr()) { if (!err) err = '시작일은 오늘까지만 고를 수 있어요'; }
+      else data.startDate = sdt;
+    }
     [['weight', '시작 체중'], ['muscle', '골격근량'], ['fat', '체지방량']].forEach(function (pair) {
       var k = pair[0], label = pair[1];
       var v = raw[k];
@@ -1138,12 +1156,14 @@
       var updated = null;
       var patch = {};
       if (data.nickname !== undefined && data.nickname !== p.nickname) patch.nickname = data.nickname;
+      if (data.startDate && data.startDate !== p.startDate) patch.startDate = data.startDate;
       if (Object.keys(patch).length) updated = await store.updateParticipant(p.id, patch);
       var metrics = data.metrics || {};
       if (Object.keys(metrics).length) {
-        var base = M.getEntry(updated || p, 1) || {};
+        var baseP = updated || p;
+        var base = M.getEntry(baseP, 1) || {};
         var next = JSON.parse(JSON.stringify(base));
-        if (!next.date) next.date = M.dayDate(p.startDate, 1);
+        if (!next.date) next.date = M.dayDate(baseP.startDate, 1);
         if (!next.meals) next.meals = {};
         Object.keys(metrics).forEach(function (k) { next[k] = metrics[k]; });
         next.updatedAt = new Date().toISOString();
@@ -1247,6 +1267,36 @@
     }, 800);
   }
 
+  /* dataURL(이미지) 다운로드 — 캔버스로 그린 리포트 PNG */
+  function downloadUrl(filename, url) {
+    var a = global.document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    global.document.body.appendChild(a);
+    a.click();
+    setTimeout(function () {
+      try { a.remove(); } catch (e) { /* 무시 */ }
+    }, 800);
+  }
+
+  /* 28일 최종 리포트 PNG 저장 — 순수 브라우저 Canvas (외부 CDN 없음) */
+  function saveReportImage() {
+    var p = state.participant;
+    if (!p) return;
+    var Rep = global.App.Report;
+    var url = null;
+    try {
+      url = Rep && Rep.toDataURL ? Rep.toDataURL(M.finalReport(p, today())) : null;
+    } catch (e) { url = null; }
+    if (!url) {
+      toast('이 브라우저에서는 이미지 저장을 지원하지 않아요. 화면을 캡처해 주세요.', 'error');
+      return;
+    }
+    var name = '마이옵티멀다이어트_28일최종리포트_' + today() + '.png';
+    downloadUrl(name, url);
+    toast('리포트 이미지를 저장했어요 · ' + name);
+  }
+
   function exportSummary() {
     download('마이옵티멀다이어트_참여자요약_' + today() + '.csv', M.summaryCsv(state.participants, today()));
     toast('전체 요약 CSV를 내려받았어요');
@@ -1304,7 +1354,7 @@
       return;
     }
     var session = Auth.signInDemo(p.id);
-    await startWith(p, session, p.name + '님으로 시작했어요');
+    await startWith(p, session, '내 28일 기록을 열었어요');
   }
 
   /* 관리자 로그인: 코드가 맞을 때만 관리자 세션을 만든다 (원클릭 체험 버튼 없음) */
@@ -1564,6 +1614,8 @@
       }
 
       case 'edit-plan': openPlanSheet(); break;
+      case 'open-report': openSheet({ type: 'report' }); break;
+      case 'save-report-image': saveReportImage(); break;
       case 'open-fast-move': openFastMove(el); break;
       case 'fast-move-to': {
         var ms = state.sheet;

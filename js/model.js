@@ -723,6 +723,244 @@
     };
   }
 
+  /* ---------- 28일 최종 리포트 ---------- */
+  /* 기간 구분: 1~3일차 / 4~7일차 / 2주차 / 3주차 / 4주차 */
+  var REPORT_PERIODS = [
+    { key: 'd13', label: '1~3일차', badge: 'D1~3', startDay: 1, endDay: 3, note: '당질 제한 · 장 해독' },
+    { key: 'd47', label: '4~7일차', badge: 'D4~7', startDay: 4, endDay: 7, note: '단백질 중심 · 밥 2/3공기' },
+    { key: 'w2', label: '2주차', badge: 'W2', startDay: 8, endDay: 14, note: '간헐적 단식 1회' },
+    { key: 'w3', label: '3주차', badge: 'W3', startDay: 15, endDay: 21, note: '간헐적 단식 2회' },
+    { key: 'w4', label: '4주차', badge: 'W4', startDay: 22, endDay: 28, note: '유지기' }
+  ];
+
+  /* 루틴 분석 항목 — 아침 / 점심 / 오후간식 / 저녁 / 물 / 운동 / 수면 / 단식 */
+  var REPORT_ROUTINES = [
+    { key: 'breakfast', label: '아침', emoji: '🌅' },
+    { key: 'lunch', label: '점심', emoji: '🍚' },
+    { key: 'snack', label: '오후간식', emoji: '🍎' },
+    { key: 'dinner', label: '저녁', emoji: '🌙' },
+    { key: 'water', label: '물', emoji: '💧' },
+    { key: 'exercise', label: '운동', emoji: '🏃‍♀️' },
+    { key: 'sleep', label: '수면', emoji: '😴' },
+    { key: 'fasting', label: '단식', emoji: '⏱️' }
+  ];
+
+  /* '달성' 기준: 그 날의 달성률 100% (모든 항목 완료) */
+  var REPORT_GOOD_PCT = 70;
+
+  function longestRun(list, pred) {
+    var best = 0, cur = 0;
+    (list || []).forEach(function (x) {
+      if (pred(x)) { cur += 1; if (cur > best) best = cur; } else cur = 0;
+    });
+    return best;
+  }
+
+  /* 받침에 맞춰 조사를 고른다 — '단식은', '운동을'처럼 자연스럽게 */
+  function josa(word, pair) {
+    var w = String(word || '');
+    var last = w.charAt(w.length - 1);
+    var code = last.charCodeAt(0);
+    var hasJong = false;
+    if (code >= 0xAC00 && code <= 0xD7A3) hasJong = (code - 0xAC00) % 28 !== 0;
+    var p = String(pair || '은는');
+    if (p === '을를') return hasJong ? '을' : '를';
+    if (p === '이가') return hasJong ? '이' : '가';
+    if (p === '과와') return hasJong ? '과' : '와';
+    return hasJong ? '은' : '는';
+  }
+
+  /* 기간 안에서 마지막 인바디 값 (단식일 다음날은 수분 영향이라 뒤로 미룬다) */
+  function periodMetric(participant, startDay, endDay) {
+    var inRange = numericMetrics(participant).filter(function (m) { return m.day >= startDay && m.day <= endDay; });
+    if (!inRange.length) return null;
+    var usable = inRange.filter(function (m) { return !isPostFastDay(participant, m.day); });
+    var pick = usable.length ? usable : inRange;
+    return pick[pick.length - 1];
+  }
+
+  function finalReport(participant, today) {
+    var p = participant || {};
+    var cur = currentDay(p, today);
+    var elapsed = Math.max(0, Math.min(cur, Program.totalDays));
+    var days = [];
+    for (var d = 1; d <= Program.totalDays; d++) {
+      var plan = getPlan(p, d);
+      var entry = getEntry(p, d);
+      days.push({
+        day: d,
+        date: dayDate(p.startDate, d),
+        plan: plan,
+        entry: entry,
+        score: scoreDay(plan, entry),
+        recorded: hasEntry(p, d),
+        fast: isFastDay(plan),
+        elapsed: d <= elapsed
+      });
+    }
+    var elapsedDays = days.filter(function (x) { return x.elapsed; });
+
+    var sum = 0, recorded = 0, perfect = 0, questsDone = 0, questsTotal = 0, fastPlanned = 0, fastDone = 0;
+    elapsedDays.forEach(function (x) {
+      sum += x.score.pct;
+      if (x.recorded) recorded += 1;
+      if (x.score.pct >= 100) perfect += 1;
+      x.score.items.forEach(function (it) {
+        questsTotal += 1;
+        if (it.done) questsDone += 1;
+      });
+      if (x.fast) {
+        fastPlanned += 1;
+        if (x.entry && x.entry.fasting14) fastDone += 1;
+      }
+    });
+
+    var wm = weeklyMetrics(p, today);
+    var startM = wm.start;
+    var latestM = wm.latest || wm.latestAny;
+    function changeOf(key) {
+      if (!startM || !latestM) return null;
+      if (typeof startM[key] !== 'number' || typeof latestM[key] !== 'number') return null;
+      return round1(latestM[key] - startM[key]);
+    }
+    var inbody = {
+      start: startM,
+      latest: latestM,
+      latestDay: latestM ? latestM.day : null,
+      latestDate: latestM ? latestM.date : null,
+      changes: {
+        weight: changeOf('weight'), muscle: changeOf('muscle'),
+        fat: changeOf('fat'), visceral: changeOf('visceral')
+      }
+    };
+
+    var periods = REPORT_PERIODS.map(function (r) {
+      var rated = 0, pSum = 0, rec = 0, done = 0, fPlan = 0, fDone = 0;
+      for (var n = r.startDay; n <= r.endDay && n <= elapsed; n++) {
+        var x = days[n - 1];
+        if (!x) continue;
+        rated += 1;
+        pSum += x.score.pct;
+        if (x.recorded) rec += 1;
+        if (x.score.pct >= 100) done += 1;
+        if (x.fast) { fPlan += 1; if (x.entry && x.entry.fasting14) fDone += 1; }
+      }
+      var metric = periodMetric(p, r.startDay, r.endDay);
+      var wDelta = null;
+      if (metric && startM && typeof metric.weight === 'number' && typeof startM.weight === 'number') {
+        wDelta = round1(metric.weight - startM.weight);
+      }
+      return {
+        key: r.key, label: r.label, badge: r.badge, note: r.note,
+        startDay: r.startDay, endDay: r.endDay,
+        dateRange: p.startDate ? (fmtShort(dayDate(p.startDate, r.startDay)) + '~' + fmtShort(dayDate(p.startDate, r.endDay))) : '',
+        elapsed: rated,
+        rate: rated ? Math.round(pSum / rated) : null,
+        recorded: rec,
+        perfect: done,
+        fastPlanned: fPlan,
+        fastDone: fDone,
+        metric: metric,
+        weightDelta: wDelta
+      };
+    });
+
+    /* 항목별 달성률 — 계획된 날만 분모에 넣는다 (단식일엔 식사·영양제 제외) */
+    var routines = REPORT_ROUTINES.map(function (r) {
+      var done = 0, planned = 0, cups = 0;
+      elapsedDays.forEach(function (x) {
+        var e = x.entry || {};
+        if (r.key === 'water') {
+          var c = typeof e.water === 'number' ? e.water : 0;
+          planned += 1;
+          done += Math.min(1, c / Program.check.waterTarget);
+          cups += c;
+        } else if (r.key === 'fasting') {
+          if (!x.fast) return;
+          planned += 1;
+          if (e.fasting14) done += 1;
+        } else if (r.key === 'exercise') {
+          planned += 1;
+          if (e.exercise && (e.exercise.weight || e.exercise.cardio)) done += 1;
+        } else if (r.key === 'sleep') {
+          planned += 1;
+          if (e.sleep) done += 1;
+        } else {
+          if (x.plan[r.key] === 'FAST') return;
+          planned += 1;
+          if (e.meals && e.meals[r.key]) done += 1;
+        }
+      });
+      return {
+        key: r.key, label: r.label, emoji: r.emoji,
+        done: round1(done), planned: planned, cups: cups,
+        pct: planned ? Math.round((done / planned) * 100) : null
+      };
+    }).filter(function (r) { return r.planned > 0; });
+
+    var ranked = routines.slice().sort(function (a, b) {
+      return (b.pct || 0) - (a.pct || 0) || String(a.label).localeCompare(String(b.label));
+    });
+    var kept = ranked.filter(function (r) { return (r.pct || 0) >= REPORT_GOOD_PCT; });
+    var missed = ranked.filter(function (r) { return (r.pct || 0) < REPORT_GOOD_PCT; })
+      .sort(function (a, b) { return (a.pct || 0) - (b.pct || 0); });
+    if (!kept.length && ranked.length) kept = [ranked[0]];
+    if (!missed.length && ranked.length > 1 && (ranked[ranked.length - 1].pct || 0) < 100) {
+      missed = [ranked[ranked.length - 1]];
+    }
+
+    var rate = elapsed ? Math.round(sum / elapsed) : 0;
+    var streak = longestRun(elapsedDays, function (x) { return x.score.pct >= 100; });
+    var recordStreak = longestRun(elapsedDays, function (x) { return x.recorded; });
+
+    var comment;
+    if (!elapsed) {
+      comment = '아직 28일이 시작 전이에요. 튜토리얼에서 내 정보와 시작 인바디를 저장하면 첫 리포트가 열려요.';
+    } else if (elapsed >= Program.totalDays) {
+      comment = '28일을 모두 걸어왔어요! 🎉 ' +
+        (perfect ? '모든 항목을 채운 날이 ' + perfect + '일이나 돼요. ' : '') +
+        (missed.length
+          ? missed[0].label + josa(missed[0].label, '은는') + ' ' + (missed[0].pct || 0) + '%로 조금 아쉬웠지만, 끝까지 기록한 것만으로 충분히 잘했어요.'
+          : '여덟 가지 루틴을 모두 ' + REPORT_GOOD_PCT + '% 이상 지켰어요. 정말 대단해요!') +
+        ' 3주 이상 유지기를 가진 뒤 다음 28일을 시작해요.';
+    } else {
+      comment = '지금까지 ' + elapsed + '일 동안 ' + rate + '%를 채웠어요. ' +
+        (kept.length ? kept[0].label + josa(kept[0].label, '은는') + ' ' + (kept[0].pct || 0) + '%로 잘 지켰어요. ' : '') +
+        (missed.length
+          ? missed[0].label + josa(missed[0].label, '을를') + ' 조금만 더 챙기면 28일이 더 좋아져요.'
+          : '이 흐름 그대로 가면 28일도 충분해요!') +
+        ' 남은 ' + Math.max(0, Program.totalDays - elapsed) + '일도 천천히 가요.';
+    }
+
+    return {
+      name: p.name || '',
+      nickname: p.nickname || p.name || '',
+      startDate: p.startDate,
+      endDate: p.startDate ? dayDate(p.startDate, Program.totalDays) : '',
+      currentDay: cur,
+      elapsed: elapsed,
+      remaining: Math.max(0, Program.totalDays - elapsed),
+      finished: elapsed >= Program.totalDays,
+      overall: {
+        rate: rate,
+        recorded: recorded,
+        perfect: perfect,
+        questsDone: Math.round(questsDone),
+        questsTotal: questsTotal,
+        streak: streak,
+        recordStreak: recordStreak,
+        fastPlanned: fastPlanned,
+        fastDone: fastDone
+      },
+      inbody: inbody,
+      periods: periods,
+      routines: routines,
+      kept: kept,
+      missed: missed,
+      comment: comment
+    };
+  }
+
   function summary(participant, today) {
     var cur = currentDay(participant, today);
     var day = cur || 1;
@@ -1311,6 +1549,11 @@
     metricChange: metricChange,
     boardDays: boardDays,
     summary: summary,
+    finalReport: finalReport,
+    josa: josa,
+    reportPeriods: REPORT_PERIODS,
+    reportRoutines: REPORT_ROUTINES,
+    reportGoodPct: REPORT_GOOD_PCT,
     round1: round1,
     metricLabel: METRIC_LABEL,
     metricKeys: METRIC_KEYS,

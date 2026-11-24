@@ -209,7 +209,7 @@
   function gate(data) {
     data = data || {};
     var demoNote = data.authMode === 'demo'
-      ? '<p class="gate-note">지금은 <b>데모 모드</b>예요. 배포하면 이 버튼이 카카오 계정으로 연결됩니다.</p>'
+      ? '<p class="gate-note">내 닉네임·시작일·인바디를 넣으면 바로 <b>내 28일 기록</b>이 시작돼요.<br>기록은 현재 기기 브라우저에 자동 저장돼요.</p>'
       : '<p class="gate-note">카카오 계정으로 로그인하면 참여 기록이 안전하게 저장돼요.</p>';
     return '' +
       '<div class="gate">' +
@@ -220,18 +220,17 @@
           '<p class="gate-desc">매일의 식단·운동·인바디를 기록하고<br>28일의 변화를 함께 봐요.</p>' +
         '</div>' +
         '<div class="gate-actions">' +
-          '<button class="btn-kakao" data-act="kakao-login">' +
+          '<div class="gate-demo">' +
+            '<span class="gate-demo-label">나의 28일</span>' +
+            '<button class="btn primary block" data-act="demo-login" data-role="participant">내 28일 기록 시작하기</button>' +
+          '</div>' +
+          (data.authMode === 'demo' ? demoNote : '') +
+          '<button class="btn-kakao ghost-kakao" data-act="kakao-login">' +
             '<span class="kakao-ic" aria-hidden="true">' +
               '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3.2c-4.9 0-8.8 3-8.8 6.7 0 2.4 1.6 4.5 4 5.8l-.9 3.2c-.1.3.2.5.4.3l3.8-2.5c.5.1 1 .1 1.5.1 4.9 0 8.8-3 8.8-6.9S16.9 3.2 12 3.2z"/></svg>' +
             '</span>카카오로 3초 만에 시작하기' +
           '</button>' +
-          demoNote +
-          '<div class="gate-demo">' +
-            '<span class="gate-demo-label">체험하기</span>' +
-            '<div class="gate-demo-row">' +
-              '<button class="btn ghost sm" data-act="demo-login" data-role="participant">데모 참여자 체험</button>' +
-            '</div>' +
-          '</div>' +
+          (data.authMode === 'demo' ? '' : demoNote) +
           '<details class="gate-code">' +
             '<summary>참여코드로 입장</summary>' +
             '<form id="code-form" class="stack" autocomplete="off">' +
@@ -239,7 +238,7 @@
               '<input class="input" name="code" placeholder="참여코드 (숫자 4자리)" inputmode="numeric" maxlength="8" autocomplete="one-time-code">' +
               '<button class="btn primary block" type="submit">입장하기</button>' +
             '</form>' +
-            '<p class="hint">참여코드는 관리자에게 받은 코드예요. 데모 코드는 1234입니다.</p>' +
+            '<p class="hint">참여코드는 관리자가 나눠준 코드예요. 처음이라면 위의 <b>내 28일 기록 시작하기</b>로 바로 시작할 수 있어요.</p>' +
           '</details>' +
           '<details class="gate-code gate-admin">' +
             '<summary>관리자 로그인</summary>' +
@@ -885,7 +884,19 @@
       ? '<section class="card"><div class="card-head"><h2>관리자 피드백</h2></div>' + feedbackList(d.feedback.slice().reverse(), false) + '</section>'
       : '';
 
-    return hero + daynav + cycleBlock(d) + dayAdvice(d) + timers + quote + quests + details + metrics + memo + feedback;
+    /* 28일차에 도달하거나 완주하면 오늘 화면 맨 위에 축하 배너 */
+    var finalBanner = (d.currentDay >= 28)
+      ? '<section class="final-banner" id="final-banner">' +
+          '<span class="fb-emoji" aria-hidden="true">🏆</span>' +
+          '<div class="fb-text"><b>' + (d.finished ? '28일 완주! 축하해요' : '28일차 도달! 마지막 하루예요') + '</b>' +
+            '<p>' + esc(d.finished
+              ? '끝까지 기록한 나를 칭찬해 주세요. 최종 리포트에서 28일을 한눈에 봐요.'
+              : '오늘까지 기록하면 최종 리포트가 완성돼요. 지금까지의 기록도 미리 볼 수 있어요.') + '</p></div>' +
+          '<button class="btn primary sm fb-btn" data-act="open-report">최종 리포트 보기</button>' +
+        '</section>'
+      : '';
+
+    return finalBanner + hero + daynav + cycleBlock(d) + dayAdvice(d) + timers + quote + quests + details + metrics + memo + feedback;
   }
 
   /* ---------------- 28일 보드 ---------------- */
@@ -972,6 +983,7 @@
     var days = d.days;
     var cur = d.currentDay;
     var head = pageHead('28일 체크보드', 'Day ' + (cur || 1) + ' 진행 중 · 전체 달성률 ' + d.overall + '%');
+    var report = reportCta((cur || 0) >= 28);
 
     var seg = segmented('board-week', [['all', '전체'], ['1', '1주'], ['2', '2주'], ['3', '3주'], ['4', '4주']], d.week);
 
@@ -1033,7 +1045,7 @@
 
     var jump = '<div class="board-jump"><button class="btn ghost sm" data-act="go-today">오늘 기록하러 가기</button><button class="btn ghost sm" data-act="nav" data-route="tutorial">주차별 허용식품</button></div>';
 
-    return head + seg + legend + body + jump;
+    return head + report + seg + legend + body + jump;
   }
 
   /* ---------------- 주차별 인바디 ---------------- */
@@ -1233,7 +1245,8 @@
         '<p class="hint">값을 고치면 그 주에 기록된 날짜에 저장되고, 비어 있으면 이번 주는 오늘·지난 주는 주 마지막 날에 저장돼요.</p>' +
         '<div class="wk-list">' + rows + '</div>' +
       '</section>' +
-      '<p class="disclaimer">단식일 다음날 측정값은 수분 영향으로 골격근량이 낮게 나올 수 있어 주차 인바디 집계에서 제외해요.</p>';
+      '<p class="disclaimer">단식일 다음날 측정값은 수분 영향으로 골격근량이 낮게 나올 수 있어 주차 인바디 집계에서 제외해요.</p>' +
+      reportCta(wm.currentDay >= 28);
   }
 
   function weeklyReadTable(wm) {
@@ -1257,6 +1270,139 @@
       weeklyReadTable(wm) +
       '<p class="hint center">' + esc(wm.notice) + '</p>' +
     '</section>';
+  }
+
+  /* ---------------- 28일 최종 리포트 ---------------- */
+  /* 보드 상단 · 인바디 하단 · 오늘 축하 배너에서 함께 여는 버튼 */
+  function reportCta(done) {
+    return '<button class="report-cta" data-act="open-report">' +
+      '<span class="rc-emoji" aria-hidden="true">🏆</span>' +
+      '<span class="rc-text"><b>28일 최종 리포트</b>' +
+        '<small>' + (done ? '28일 완주 기록 보기' : '지금까지 기록으로 미리 보기') + '</small></span>' +
+      '<span class="rc-arrow" aria-hidden="true">' + icon('chevron') + '</span>' +
+    '</button>';
+  }
+
+  function reportIbRow(ib, key, label, unit, digits) {
+    var sv = ib.start && typeof ib.start[key] === 'number' ? ib.start[key] : null;
+    var lv = ib.latest && typeof ib.latest[key] === 'number' ? ib.latest[key] : null;
+    var delta = ib.changes[key];
+    return '<div class="rs-ib-row">' +
+      '<span class="rs-ib-label">' + esc(label) + '</span>' +
+      '<span class="rs-ib-val">' + (sv === null ? '—' : fmtNum(sv, digits)) + ' <i>→</i> <b>' + (lv === null ? '—' : fmtNum(lv, digits)) + '</b><em>' + esc(unit) + '</em></span>' +
+      '<span class="rs-ib-delta">' + (delta === null ? '<span class="delta muted">기록 부족</span>' : deltaBadge(delta, key)) + '</span>' +
+    '</div>';
+  }
+
+  /* 4주 종료 후 최소 3주 유지기 가이드 — 최종 리포트 하단 */
+  function maintenanceGuide() {
+    var G = Program.maintenance;
+    if (!G) return '';
+    function block(title, inner) {
+      return '<section class="mt-block"><h4>' + esc(title) + '</h4>' + inner + '</section>';
+    }
+    var when = '<ul class="mt-list">' + G.when.items.map(function (it) {
+      return '<li><span class="mt-e" aria-hidden="true">' + esc(it.e) + '</span><span>' + esc(it.t) + '</span></li>';
+    }).join('') + '</ul>';
+    var routines = '<dl class="mt-dl">' + G.routines.items.map(function (it) {
+      return '<div><dt><span aria-hidden="true">' + esc(it.e) + '</span>' + esc(it.k) + '</dt><dd>' + esc(it.t) + '</dd></div>';
+    }).join('') + '</dl>';
+    var foods = '<dl class="mt-dl">' + G.foods.groups.map(function (it) {
+      return '<div><dt><span aria-hidden="true">' + esc(it.e) + '</span>' + esc(it.k) + '</dt><dd>' + esc(it.t) + '</dd></div>';
+    }).join('') + '</dl>';
+    return '<section class="mt-guide" id="maintenance-guide">' +
+      '<div class="mt-head"><span class="mt-badge">' + esc(G.badge) + '</span>' +
+        '<div><h3>' + esc(G.title) + '</h3><p class="hint">' + esc(G.sub) + '</p></div></div>' +
+      block(G.when.title, when) +
+      block(G.routines.title, routines) +
+      block(G.foods.title, foods) +
+      '<p class="mt-note">' + esc(G.note) + '</p>' +
+    '</section>';
+  }
+
+  function reportSheet(d) {
+    var r = d.report;
+    if (!r) return '';
+    var o = r.overall;
+    var ib = r.inbody;
+    var preview = !r.finished;
+
+    var note = preview
+      ? '<p class="rs-preview" id="rs-preview">' + esc('Day ' + (r.currentDay || 1) + '까지 기록으로 미리 보는 리포트예요 · 28일이 끝나면 그날 기록으로 다시 채워져요.') + '</p>'
+      : '<p class="rs-done" id="rs-done">' + esc('28일 완주! 끝까지 기록한 나를 칭찬해 주세요 🎉') + '</p>';
+
+    var stats = '<div class="rs-stats">' +
+      '<div class="rs-stat main"><span>28일 전체 달성률</span><b>' + clampPct(o.rate) + '<em>%</em></b>' +
+        '<small>기록 ' + o.recorded + '일 · 모두 완료 ' + o.perfect + '일</small></div>' +
+      '<div class="rs-stat"><span>완료한 날</span><b>' + o.perfect + '<em>/28</em></b><small>모든 항목을 채운 날</small></div>' +
+      '<div class="rs-stat"><span>완료한 퀘스트</span><b>' + o.questsDone + '<em>개</em></b><small>전체 ' + o.questsTotal + '개 중</small></div>' +
+      '<div class="rs-stat"><span>최장 연속 달성</span><b>' + (o.streak ? o.streak + '<em>일</em>' : '—') + '</b><small>' + (o.streak ? '모두 완료한 날' : '기록 ' + o.recordStreak + '일 연속') + '</small></div>' +
+      '<div class="rs-stat"><span>단식 완료</span><b>' + o.fastDone + '<em>회</em></b><small>계획 ' + o.fastPlanned + '회</small></div>' +
+    '</div>';
+
+    var inbody = '<section class="rs-sec" id="rs-inbody">' +
+      '<h3>최종 인바디 변화</h3>' +
+      '<p class="hint">' + (ib.start && ib.latest
+        ? '시작 ' + esc(M.fmtShort(ib.start.date)) + ' → 최신 ' + esc(M.fmtShort(ib.latest.date)) + ' (' + esc('Day ' + ib.latest.day) + ' 기록)'
+        : '인바디 기록이 아직 없어요. 오늘 탭에서 시작 인바디를 넣어 주세요.') + '</p>' +
+      '<div class="rs-ib">' +
+        reportIbRow(ib, 'weight', '몸무게', 'kg', 1) +
+        reportIbRow(ib, 'muscle', '골격근량', 'kg', 1) +
+        reportIbRow(ib, 'fat', '체지방량', 'kg', 1) +
+        reportIbRow(ib, 'visceral', '내장지방레벨', '레벨', 0) +
+      '</div>' +
+    '</section>';
+
+    var weeks = '<section class="rs-sec" id="rs-weeks">' +
+      '<h3>주차별 결과</h3>' +
+      '<div class="rs-weeks">' + r.periods.map(function (w) {
+        var pct = w.rate;
+        var cls = pct === null ? 'future' : pct >= 80 ? 'good' : pct >= 50 ? 'mid' : 'low';
+        return '<div class="rs-week ' + cls + '">' +
+          '<div class="rs-week-head"><span class="rs-week-badge">' + esc(w.badge) + '</span><b>' + esc(w.label) + '</b>' +
+            '<span class="rs-week-range">' + esc(w.dateRange) + '</span>' +
+            '<em class="rs-week-pct ' + cls + '">' + (pct === null ? '예정' : pct + '%') + '</em></div>' +
+          '<span class="rs-bar"><i class="' + cls + '" style="width:' + clampPct(pct === null ? 0 : pct) + '%"></i></span>' +
+          '<div class="rs-week-foot">' +
+            (w.metric
+              ? '<span>몸무게 ' + fmtNum(w.metric.weight) + 'kg' + (w.weightDelta === null ? '' : ' (' + esc(M.deltaText(w.weightDelta)) + ')') + ' · 체지방 ' + fmtNum(w.metric.fat) + 'kg</span>'
+              : '<span>인바디 기록 없음</span>') +
+            (w.fastPlanned ? '<span>단식 ' + w.fastDone + '/' + w.fastPlanned + '</span>' : '<span>' + esc(w.note) + '</span>') +
+          '</div>' +
+        '</div>';
+      }).join('') + '</div>' +
+    '</section>';
+
+    function routineLi(x) {
+      return '<li class="rs-routine">' +
+        '<span class="rr-e" aria-hidden="true">' + esc(x.emoji) + '</span>' +
+        '<b>' + esc(x.label) + '</b>' +
+        '<span class="rs-bar sm"><i style="width:' + clampPct(x.pct) + '%"></i></span>' +
+        '<em>' + clampPct(x.pct) + '%</em>' +
+      '</li>';
+    }
+    var keptList = r.kept.length ? r.kept.slice(0, 3).map(routineLi).join('') : '<li class="rs-none">아직 잘 지킨 항목이 없어요</li>';
+    var missList = r.missed.length ? r.missed.slice(0, 3).map(routineLi).join('') : '<li class="rs-none">놓친 항목이 거의 없어요 🎉</li>';
+    var routines = '<section class="rs-sec" id="rs-routines">' +
+      '<h3>잘 지킨 루틴 vs 아쉬웠던 루틴</h3>' +
+      '<div class="rs-routine-cols">' +
+        '<div class="rs-col good"><div class="rs-col-head">✅ 잘 지킨 루틴</div><ul>' + keptList + '</ul></div>' +
+        '<div class="rs-col weak"><div class="rs-col-head">🌱 아쉬웠던 루틴</div><ul>' + missList + '</ul></div>' +
+      '</div>' +
+      '<details class="rs-all"><summary>항목별 달성률 전체 보기 (' + r.routines.length + '개)</summary>' +
+        '<ul>' + r.routines.map(routineLi).join('') + '</ul></details>' +
+      '<p class="rs-comment" id="rs-comment">💬 ' + esc(r.comment) + '</p>' +
+    '</section>';
+
+    var foot = '<div class="rs-foot"><b>@yoyop_diet</b><span>' + esc(Program.name) + ' · 28일 루틴 · v' + esc(Program.version) + '</span></div>' +
+      '<button class="btn primary block rs-save" data-act="save-report-image">📷 리포트 이미지 저장 (PNG)</button>' +
+      '<p class="hint center">저장한 이미지에는 달성률 요약 · 인바디 변화 · 잘 지킨/아쉬웠던 루틴만 담겨요. 유지기 가이드는 이 화면 아래에서 볼 수 있어요.</p>';
+
+    return sheetWrap(
+      sheetHead('🏆 28일 최종 리포트', r.nickname + ' · ' + M.fmtShort(r.startDate) + ' ~ ' + M.fmtShort(r.endDate)) +
+      note + stats + inbody + weeks + routines + maintenanceGuide() + foot,
+      'report'
+    );
   }
 
   /* ---------------- 공구 · 추천 ---------------- */
@@ -1406,6 +1552,7 @@
     var start = d.start || {};
     var done = !!d.done;
     var nick = d.nickname || '';
+    var startDate = d.startDate || '';
     var gender = d.gender === 'male' ? 'male' : 'female';
     var cyc = d.cycle || {};
     var cycleStart = cyc.start || '';
@@ -1420,6 +1567,7 @@
         '<div><b>' + esc(T.title || '시작 튜토리얼') + '</b>' +
         '<p class="hint">순서대로 읽으면 28일 동안 뭘 먹고 어떻게 움직일지 다 정리돼요.</p></div></div>' +
       '<ol class="tut-steps">' + (T.steps || []).map(tutStep).join('') + '</ol>' +
+      '<p class="tut-store-note">' + icon('check') + '<span>' + esc('기록은 현재 기기 브라우저에 자동 저장돼요. 같은 기기에서 다시 열면 그대로 이어져요.') + '</span></p>' +
     '</section>';
 
     /* 성별 선택 — 여성을 고르면 생리주기 입력란이 열리고, 남성이면 숨긴다 */
@@ -1456,6 +1604,9 @@
       '<form id="tutorial-form" class="tut-form" autocomplete="off">' +
         '<label class="tut-field wide"><span>닉네임</span>' +
           '<span class="tut-input"><input type="text" name="nickname" data-tut="nickname" maxlength="12" value="' + esc(nick) + '" placeholder="예: 유니"></span></label>' +
+        '<label class="tut-field wide"><span>시작일</span>' +
+          '<span class="tut-input"><input type="date" name="startDate" data-tut="startDate" value="' + esc(startDate) + '" aria-label="28일 시작일"></span></label>' +
+        '<p class="hint tut-start-hint">오늘 시작하면 오늘을 1일차로 잡아요. 지난 날짜로 바꾸면 그날부터 기록해요.</p>' +
         genderBlock +
         cycleBlock +
         '<div class="tut-grid">' +
@@ -1601,11 +1752,11 @@
     '</section>';
 
     var footer = '<section class="card muted-card">' +
-      '<div class="card-head"><h2>데모 · 설정</h2></div>' +
-      '<p class="hint">지금은 로컬 데모 데이터로 동작해요. 실제 배포에서는 관리자 로그인과 서버 저장(Supabase)을 붙여야 합니다.</p>' +
+      '<div class="card-head"><h2>기록 · 설정</h2></div>' +
+      '<p class="hint">기록은 이 기기 브라우저에 저장돼요. 여러 명이 각자 쓰려면 친구는 자기 폰에서 링크를 열어 시작하면 돼요.</p>' +
       '<div class="tool-row">' +
         '<button class="btn ghost sm" data-act="nav" data-route="promos">참여자 화면의 추천템 탭 보기</button>' +
-        '<button class="btn danger-ghost sm" data-act="reset-demo">데모 데이터 초기화</button>' +
+        '<button class="btn danger-ghost sm" data-act="reset-demo">기기 데모 기록 초기화</button>' +
       '</div>' +
     '</section>';
 
@@ -1890,7 +2041,7 @@
   function profileSheet(d) {
     var p = d.participant;
     var provider = d.provider === 'supabase' || d.provider === 'kakao' ? '카카오 로그인'
-      : (d.provider === 'code' ? '참여코드 입장' : (d.provider === 'admin' || d.role === 'admin' ? '관리자 코드' : '데모 체험'));
+      : (d.provider === 'code' ? '참여코드 입장' : (d.provider === 'admin' || d.role === 'admin' ? '관리자 코드' : '이 기기에서 시작'));
     return sheetWrap(
       sheetHead('내 정보') +
       '<div class="profile-head"><span class="avatar lg">' + esc(String(p.nickname || p.name || '?').slice(0, 1)) + '</span>' +
@@ -1929,12 +2080,12 @@
         '<p class="sheet-text">카카오 로그인을 시작할게요. 잠시만 기다려주세요.</p>');
     }
     return sheetWrap(
-      sheetHead('카카오로 시작하기', '지금은 데모 모드예요') +
+      sheetHead('카카오로 시작하기', '지금은 이 기기에서 바로 시작할 수 있어요') +
       '<div class="kakao-demo">' +
         '<span class="kakao-circle">' + '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3.2c-4.9 0-8.8 3-8.8 6.7 0 2.4 1.6 4.5 4 5.8l-.9 3.2c-.1.3.2.5.4.3l3.8-2.5c.5.1 1 .1 1.5.1 4.9 0 8.8-3 8.8-6.9S16.9 3.2 12 3.2z"/></svg>' + '</span>' +
-        '<p>배포하면 이 버튼이 카카오 계정과 연결됩니다.<br>(Supabase Auth · Kakao OAuth)<br>지금은 아래 체험 계정으로 시작해요.</p>' +
+        '<p>아래 버튼을 누르면 내 28일 기록이 열려요.<br>튜토리얼에서 닉네임·시작일·인바디를 넣으면 바로 시작돼요.<br>기록은 현재 기기 브라우저에 자동 저장돼요.</p>' +
       '</div>' +
-      '<button class="btn primary block" data-act="demo-login" data-role="participant">데모 참여자(김유니)로 시작</button>' +
+      '<button class="btn primary block" data-act="demo-login" data-role="participant">내 28일 기록 시작하기</button>' +
       '<p class="hint center">관리자 화면은 로그인 화면의 ‘관리자 로그인’에서 코드로 들어갈 수 있어요.</p>'
     );
   }
@@ -1948,6 +2099,9 @@
     promos: promos,
     promoCard: promoCard,
     tutorial: tutorial,
+    report: reportSheet,
+    reportCta: reportCta,
+    maintenanceGuide: maintenanceGuide,
     admin: admin,
     adminDetail: adminDetail,
     planSheet: planSheet,
