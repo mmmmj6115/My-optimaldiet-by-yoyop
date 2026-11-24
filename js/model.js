@@ -233,10 +233,24 @@
     var minH = Number(Program.check.fastMinHours) || 18;
     var minMin = minH * 60;
     var viewToday = fmtDate(nowD) === fmtDate(new Date(start.getTime() + DAY_MS));
+    /* 단식일의 아침 체크 = 단식 종료 시각 */
+    var entryNow = getEntry(p, d) || {};
+    var fastEnd = hmToMinutes(entryNow.breakfastAt) !== null ? normHM(entryNow.breakfastAt, '') : null;
+    var held = fastEnd ? heldMinutes(base.hm, fastEnd, dateStr) : 0;
     return {
       day: d,
       hours: targetHours,
       minHours: minH,
+      fastEndClock: fastEnd,
+      mealChecked: !!fastEnd,
+      heldMinutes: held,
+      heldText: minutesText(held),
+      heldDone: fastEnd ? held >= targetMin : false,
+      heldMinPassed: fastEnd ? held >= minMin : false,
+      heldMinShortMin: Math.max(0, minMin - held),
+      heldMinShortText: minutesText(Math.max(0, minMin - held)),
+      heldFullShortMin: Math.max(0, targetMin - held),
+      heldFullShortText: minutesText(Math.max(0, targetMin - held)),
       prevMeal: base.hm,
       source: base.source,
       sourceDay: base.sourceDay,
@@ -620,6 +634,102 @@
     };
   }
 
+  /* ---- 아침 · 저녁 식사 체크 ---- */
+  /* 그 날 기록한 첫 식사(공복 끝) 시각 — 'HH:MM' 또는 null. 단식일이면 단식 종료 시각으로 읽는다 */
+  function breakfastAt(participant, day) {
+    var e = getEntry(participant, day) || {};
+    return hmToMinutes(e.breakfastAt) !== null ? normHM(e.breakfastAt, '') : null;
+  }
+
+  /* 그 날 공복의 시작 시각 = 그 날 기록한 마지막 식사 → 그 날 설정 → 전날 기록 → 전날 설정 → 기본 설정 → 기본값
+   * 저녁 식사 체크로 남긴 전날 시각을 다음 날 공복 타이머가 그대로 이어받는다. */
+  function fastStartFor(participant, day, fallback) {
+    var p = participant || {};
+    var d = Number(day) || 1;
+    var s = p.settings || {};
+    var linked = s.lastMeals && typeof s.lastMeals === 'object' ? s.lastMeals : {};
+    var own = getEntry(p, d);
+    if (own && hmToMinutes(own.lastMealAt) !== null) {
+      return { hm: normHM(own.lastMealAt, ''), source: 'own', sourceDay: d };
+    }
+    if (hmToMinutes(linked[String(d)]) !== null) {
+      return { hm: normHM(linked[String(d)], ''), source: 'own', sourceDay: d };
+    }
+    var prev = d > 1 ? getEntry(p, d - 1) : null;
+    if (prev && hmToMinutes(prev.lastMealAt) !== null) {
+      return { hm: normHM(prev.lastMealAt, ''), source: 'prev', sourceDay: d - 1 };
+    }
+    if (d > 1 && hmToMinutes(linked[String(d - 1)]) !== null) {
+      return { hm: normHM(linked[String(d - 1)], ''), source: 'prev', sourceDay: d - 1 };
+    }
+    if (hmToMinutes(s.lastMeal) !== null) {
+      return { hm: normHM(s.lastMeal, ''), source: 'settings', sourceDay: null };
+    }
+    return { hm: fallback || Program.check.lastMeal, source: 'default', sourceDay: null };
+  }
+
+  /* 시작 시각 → 종료 시각까지 실제로 비운 시간(분). 종료 시각은 그 날 날짜 기준 */
+  function heldMinutes(startHM, endHM, dateStr) {
+    var sm = hmToMinutes(startHM), em = hmToMinutes(endHM);
+    if (sm === null || em === null) return 0;
+    var end = parseDate(dateStr) || new Date();
+    end.setHours(Math.floor(em / 60), em % 60, 0, 0);
+    var start = new Date(end.getTime());
+    start.setHours(Math.floor(sm / 60), sm % 60, 0, 0);
+    if (start.getTime() > end.getTime()) start.setDate(start.getDate() - 1);
+    return Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000));
+  }
+
+  /* 그 날의 날짜 문자열 (기록에 적힌 날짜 우선) */
+  function dayDateOf(participant, day, now) {
+    var e = getEntry(participant, day) || {};
+    if (e.date && parseDate(e.date)) return e.date;
+    var p = participant || {};
+    if (p.startDate) return dayDate(p.startDate, Number(day) || 1);
+    return fmtDate(now || new Date());
+  }
+
+  /* 공복 카드 상태: 아침(첫 식사) 체크가 있으면 그 시점까지의 실제 공복 시간을 고정한다 */
+  function fastingDayState(participant, day, now, hours) {
+    var p = participant || {};
+    var d = Number(day) || 1;
+    var nowD = now ? new Date(now.getTime ? now.getTime() : now) : new Date();
+    var start = fastStartFor(p, d, Program.check.lastMeal);
+    var f = fastingState(start.hm, nowD, hours);
+    if (!f) return null;
+    f.startSource = start.source;
+    f.startSourceDay = start.sourceDay;
+    f.breakfastAt = breakfastAt(p, d);
+    f.mealChecked = !!f.breakfastAt;
+    if (f.mealChecked) {
+      var held = heldMinutes(f.startClock, f.breakfastAt, dayDateOf(p, d, nowD));
+      f.heldMinutes = held;
+      f.heldText = minutesText(held);
+      f.heldDone = held >= f.targetMin;
+      f.heldShortMin = Math.max(0, f.targetMin - held);
+      f.heldShortText = minutesText(f.heldShortMin);
+      f.elapsedMin = held;
+      f.elapsedText = f.heldText;
+      f.leftMin = f.targetMin - held;
+      f.leftText = minutesText(Math.max(0, f.leftMin));
+      f.pct = Math.max(0, Math.min(100, Math.round((held / f.targetMin) * 100)));
+    }
+    return f;
+  }
+
+  /* 마지막 저녁식사 카드 상태: 저녁 식사 시작 체크가 있으면 그 시각을 보여준다 */
+  function dinnerDayState(participant, day, now, mode) {
+    var p = participant || {};
+    var d = Number(day) || 1;
+    var nowD = now ? new Date(now.getTime ? now.getTime() : now) : new Date();
+    var t = dinnerState(timerPrefs(p).wake, nowD, mode);
+    if (!t) return null;
+    var e = getEntry(p, d) || {};
+    t.dinnerAt = hmToMinutes(e.lastMealAt) !== null ? normHM(e.lastMealAt, '') : null;
+    t.mealChecked = !!t.dinnerAt;
+    return t;
+  }
+
   /* 내일 기상 목표 시각 → 권장 취침까지 남은 시간 (7시간 수면 확보 기준) */
   function sleepState(wake, now, hours) {
     now = now ? new Date(now.getTime ? now.getTime() : now) : new Date();
@@ -647,11 +757,11 @@
 
   /* ---------- 마지막 저녁식사 타이머 ---------- */
   var DINNER_MODES = {
-    shake: { key: 'shake', offset: 2, label: '단백질쉐이크 저녁', short: '셰이크', tag: '-2h', emoji: '🥤' },
+    shake: { key: 'shake', offset: 2, label: '단백질쉐이크 저녁', short: '쉐이크', tag: '-2h', emoji: '🥤' },
     meal: { key: 'meal', offset: 4, label: '무탄·저탄 일반식', short: '무탄·저탄', tag: '-4h', emoji: '🥗' }
   };
 
-  /* 1주차(D1~7)는 셰이크, 2~4주차는 일반식이 기본값 */
+  /* 1주차(D1~7)는 쉐이크, 2~4주차는 일반식이 기본값 */
   function dinnerDefaultMode(day) {
     var d = Number(day) || 1;
     if (Program.w1Plan && Program.w1Plan.days.indexOf(d) >= 0) return 'shake';
@@ -931,9 +1041,15 @@
     metricKeys: METRIC_KEYS,
     hmToMinutes: hmToMinutes,
     normHM: normHM,
+    clockOf: clockOf,
     minutesText: minutesText,
     timerPrefs: timerPrefs,
     fastingState: fastingState,
+    breakfastAt: breakfastAt,
+    fastStartFor: fastStartFor,
+    heldMinutes: heldMinutes,
+    fastingDayState: fastingDayState,
+    dinnerDayState: dinnerDayState,
     sleepState: sleepState,
     dinnerState: dinnerState,
     dinnerMode: dinnerMode,

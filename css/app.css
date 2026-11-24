@@ -279,6 +279,22 @@ h1, h2, h3, p { margin: 0; }
 .tc-note { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.45; }
 .tc-sub { font-size: 11px; color: #A8632F; background: #FDF3E7; border-radius: 8px; padding: 6px 8px; margin-top: 8px; line-height: 1.45; }
 .tc-src { font-size: 10.5px; color: var(--muted); margin-top: 5px; }
+/* 타이머 카드 안 체크 버튼 (아침 먹었어요 · 저녁 식사 시작) */
+.tc-check {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
+  margin-top: 10px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 12px;
+  background: #fff; font-family: inherit; font-size: 12px; font-weight: 700; color: #2C6F58;
+  text-align: left; cursor: pointer;
+}
+.tc-check.on { background: #EAF8F0; border-color: #BEE6D3; }
+.tc-check .tick { width: 22px; height: 22px; }
+.tc-check-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tc-check-text b { font-size: 12px; font-weight: 800; }
+.tc-check-text small { font-size: 10.5px; font-weight: 600; color: var(--muted); line-height: 1.4; }
+.tc-check.on .tc-check-text small { color: #1B6B50; }
+.timer-card.dinner .tc-check { color: #A8632F; }
+.timer-card.dinner .tc-check.on { background: #FFF7EC; border-color: #F0D9B8; }
+.timer-card.dinner .tc-check.on .tc-check-text small { color: #A8632F; }
 /* 단식일 24시간 타이머 */
 .timer-card.fast24 { background: linear-gradient(165deg, #FFFFFF, #E9F8F0 60%, #FDF3E7 130%); border-color: #CBEBDC; }
 .timer-card.fast24 .tc-sub { background: #E7F6EE; color: #1B6B50; }
@@ -815,6 +831,7 @@ h1, h2, h3, p { margin: 0; }
 .food-group { margin-top: 12px; }
 .food-group:first-of-type { margin-top: 0; }
 .food-group h3 { font-size: 12px; font-weight: 700; color: var(--ink-2); margin-bottom: 7px; }
+.food-group .prot-weight { margin: 0 0 8px; font-size: 11.5px; }
 
 /* ---------- D1~3 당질 제한 · 장 해독 ---------- */
 .detox-card .week-chip { color: #fff; background: var(--brand); }

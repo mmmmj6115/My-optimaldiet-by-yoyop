@@ -386,27 +386,63 @@
     return d.score ? d.score.pct : 0;
   }
 
+  /* 타이머 카드 안 체크 버튼 (아침 · 저녁 식사) — 누르면 지금 시각 저장, 다시 누르면 해제 */
+  function mealCheckRow(opts) {
+    var isBreakfast = opts.kind === 'breakfast';
+    var act = isBreakfast ? 'check-breakfast' : 'check-dinner';
+    var title = isBreakfast ? '아침 먹었어요 ✓' : '저녁 식사 시작했어요 ✓';
+    var small = opts.checked
+      ? opts.clock + ' 기록됨 · 눌러서 해제'
+      : (opts.hint || (isBreakfast ? '누르면 지금 시각을 아침 식사로 저장해요' : '누르면 지금 시각을 저장해요'));
+    var field = isBreakfast ? 'breakfastAt' : 'dinnerAt';
+    return '<button class="tc-check' + (opts.checked ? ' on' : '') + '" data-act="' + act + '" aria-pressed="' + (opts.checked ? 'true' : 'false') + '">' +
+        '<span class="tc-check-text"><b>' + esc(title) + '</b><small>' + esc(small) + '</small></span>' +
+        '<span class="tick' + (opts.checked ? ' on' : '') + '" aria-hidden="true">' + (opts.checked ? icon('check') : '') + '</span>' +
+      '</button>' +
+      (opts.checked
+        ? '<label class="time-row"><span>' + esc(opts.label) + '</span><input type="time" data-field="' + field + '" value="' + esc(opts.clock) + '" aria-label="' + esc(opts.label) + '"></label>'
+        : '');
+  }
+
   function timerCardFasting(d) {
     var f = d.fasting;
     if (!f) return '';
     /* 단식일이면 24시간 간헐적 단식 타이머로 바뀐다 (전날 마지막 식사 시각 기준) */
     if (d.fast && d.fast24) return timerCardFast24(d);
-    var cap = f.done ? '공복 ' + f.hours + '시간 달성' : '공복 ' + f.hours + '시간까지';
-    var val = f.done
-      ? '<span class="big-num">' + f.hours + '시간 공복 달성!</span> 🎉'
-      : '<span class="big-num">' + esc(f.leftText) + '</span> <em>남았어요</em>';
+    var cap, val, pill, metaLeft, note;
+    if (f.mealChecked) {
+      cap = '아침 식사 시각을 기록했어요 · 공복 ' + f.hours + '시간 기준';
+      val = '<span class="big-num">공복 ' + esc(f.heldText) + ' 완료</span> <em>· ' + esc(f.breakfastAt) + ' 아침 식사</em>';
+      pill = f.heldDone ? '달성' : '기록 완료';
+      metaLeft = '공복 ' + esc(f.heldText) + ' 유지';
+      note = f.heldDone
+        ? f.hours + '시간 목표를 채웠어요. 다음 식사 전까지 공복이 이어져요.'
+        : f.hours + '시간까지 ' + f.heldShortText + ' 모자랐어요. 다음엔 마지막 식사를 조금 더 일찍 마쳐봐요.';
+    } else {
+      cap = f.done ? '공복 ' + f.hours + '시간 달성' : '공복 ' + f.hours + '시간까지';
+      val = f.done
+        ? '<span class="big-num">' + f.hours + '시간 공복 달성!</span> 🎉'
+        : '<span class="big-num">' + esc(f.leftText) + '</span> <em>남았어요</em>';
+      pill = f.done ? '달성' : '진행 중';
+      metaLeft = '공복 ' + esc(f.elapsedText) + ' 경과';
+      note = (f.startToday ? '오늘 ' : '어제 ') + f.startClock + ' 마지막 식사 · ' + f.hours + '시간 공복까지';
+    }
     return '<article class="timer-card fast" id="fast-card">' +
       '<div class="tc-head">' +
         '<span class="tc-label">' + icon('clock') + '공복 타이머</span>' +
-        '<span class="tc-pill" id="t-fast-state">' + (f.done ? '달성' : '진행 중') + '</span>' +
+        '<span class="tc-pill" id="t-fast-state">' + esc(pill) + '</span>' +
       '</div>' +
       '<p class="tc-cap" id="t-fast-cap">' + esc(cap) + '</p>' +
       '<p class="tc-big" id="t-fast-value">' + val + '</p>' +
       gaugeBlock(f.pct, { id: 't-fast-bar', runId: 't-fast-run' }) +
-      '<div class="tc-meta"><span id="t-fast-elapsed">공복 ' + esc(f.elapsedText) + ' 경과</span><span id="t-fast-pct">' + f.pct + '%</span></div>' +
-      '<p class="tc-note" id="t-fast-note">' + esc((f.startToday ? '오늘 ' : '어제 ') + f.startClock + ' 마지막 식사 · ' + f.hours + '시간 공복까지') + '</p>' +
+      '<div class="tc-meta"><span id="t-fast-elapsed">' + metaLeft + '</span><span id="t-fast-pct">' + f.pct + '%</span></div>' +
+      '<p class="tc-note" id="t-fast-note">' + esc(note) + '</p>' +
       '<p class="tc-note" id="t-fast-hint">' + esc('단식일에는 이 카드가 24시간 단식 타이머로 바뀌어요.') + '</p>' +
-      '<label class="time-row"><span>전날 마지막 식사</span><input type="time" data-field="lastMeal" value="' + esc(d.prefs.lastMeal) + '" aria-label="전날 마지막 식사 시각"></label>' +
+      mealCheckRow({
+        kind: 'breakfast', checked: !!f.mealChecked, clock: f.breakfastAt, label: '아침 식사 시각',
+        hint: '누르면 지금 시각을 아침 식사로 저장해요'
+      }) +
+      '<label class="time-row"><span>공복 시작 · 마지막 식사</span><input type="time" data-field="lastMeal" value="' + esc(f.startClock) + '" aria-label="전날 마지막 식사 시각"></label>' +
     '</article>';
   }
 
@@ -414,20 +450,32 @@
   function timerCardFast24(d) {
     var s = d.fast24;
     if (!s) return '';
-    var cap = (s.isViewToday ? '전날 ' : M.fmtShort(s.startDate) + ' ') + s.startClock + ' 마지막 식사 → ' +
-      (s.isViewToday ? '오늘 ' : M.fmtShort(s.endDate) + ' ') + s.endClock + '까지 (' + s.hours + '시간)';
-    var val;
-    if (s.done && s.isPast) val = '<span class="big-num">' + s.hours + '시간 창이 끝났어요</span>';
-    else if (s.done) val = '<span class="big-num">' + s.hours + '시간 단식 달성!</span> 🏆';
-    else if (s.beforeStart) val = '<span class="big-num">' + s.startClock + '</span> <em>부터 시작해요</em>';
-    else val = '<span class="big-num">' + esc(s.leftText) + '</span> <em>남았어요</em>';
-    var pill = s.isPast ? '지난 단식일' : (s.done ? '달성' : (s.beforeStart ? '시작 전' : (s.minPassed ? s.minHours + '시간 통과' : '진행 중')));
-    var minLine;
-    if (s.isPast) minLine = s.minHours + '시간 최소 기준 · ' + s.hours + '시간 창이 이미 지난 날이에요';
-    else if (s.done) minLine = s.minHours + '시간 최소 기준 통과 ✓ · ' + s.hours + '시간 달성 🏆';
-    else if (s.beforeStart) minLine = s.minHours + '시간 최소 기준 · 시작 후 ' + s.minHours + '시간이면 통과예요';
-    else if (s.minPassed) minLine = s.minHours + '시간 최소 기준 통과 ✓ · ' + s.hours + '시간까지 ' + esc(s.leftText) + ' 남았어요';
-    else minLine = s.minHours + '시간 최소 기준까지 ' + esc(s.minLeftText) + ' 남았어요';
+    var cap, val, pill, minLine;
+    if (s.mealChecked) {
+      cap = '단식 종료 시각을 기록했어요 · ' + s.hours + '시간 창 기준';
+      val = '<span class="big-num">단식 ' + esc(s.heldText) + ' 완료</span> <em>· ' + esc(s.fastEndClock) + ' 단식 종료</em>';
+      pill = s.heldDone ? '달성' : (s.heldMinPassed ? '최소 기준 통과' : '단식 종료');
+      minLine = s.heldDone
+        ? s.minHours + '시간 최소 기준 통과 ✓ · ' + s.hours + '시간 채웠어요 🏆'
+        : (s.heldMinPassed
+          ? s.minHours + '시간 최소 기준 통과 ✓ · ' + s.hours + '시간까지 ' + esc(s.heldFullShortText) + ' 남았어요'
+          : s.minHours + '시간 최소 기준까지 ' + esc(s.heldMinShortText) + ' 남았어요');
+    } else {
+      cap = (s.isViewToday ? '전날 ' : M.fmtShort(s.startDate) + ' ') + s.startClock + ' 마지막 식사 → ' +
+        (s.isViewToday ? '오늘 ' : M.fmtShort(s.endDate) + ' ') + s.endClock + '까지 (' + s.hours + '시간)';
+      if (s.done && s.isPast) val = '<span class="big-num">' + s.hours + '시간 창이 끝났어요</span>';
+      else if (s.done) val = '<span class="big-num">' + s.hours + '시간 단식 달성!</span> 🏆';
+      else if (s.beforeStart) val = '<span class="big-num">' + s.startClock + '</span> <em>부터 시작해요</em>';
+      else val = '<span class="big-num">' + esc(s.leftText) + '</span> <em>남았어요</em>';
+      pill = s.isPast ? '지난 단식일' : (s.done ? '달성' : (s.beforeStart ? '시작 전' : (s.minPassed ? s.minHours + '시간 통과' : '진행 중')));
+      if (s.isPast) minLine = s.minHours + '시간 최소 기준 · ' + s.hours + '시간 창이 이미 지난 날이에요';
+      else if (s.done) minLine = s.minHours + '시간 최소 기준 통과 ✓ · ' + s.hours + '시간 달성 🏆';
+      else if (s.beforeStart) minLine = s.minHours + '시간 최소 기준 · 시작 후 ' + s.minHours + '시간이면 통과예요';
+      else if (s.minPassed) minLine = s.minHours + '시간 최소 기준 통과 ✓ · ' + s.hours + '시간까지 ' + esc(s.leftText) + ' 남았어요';
+      else minLine = s.minHours + '시간 최소 기준까지 ' + esc(s.minLeftText) + ' 남았어요';
+    }
+    var pct = s.mealChecked ? Math.max(0, Math.min(100, Math.round((s.heldMinutes / (s.hours * 60)) * 100))) : s.pct;
+    var elapsedText = s.mealChecked ? s.heldText : s.elapsedText;
     var srcText = s.source === 'prev' ? '전날(Day ' + (s.day - 1) + ') 기록에서 가져왔어요'
       : s.source === 'manual' ? '직접 고친 시각이에요'
       : s.source === 'settings' ? '설정한 시각을 쓰고 있어요'
@@ -439,10 +487,16 @@
       '</div>' +
       '<p class="tc-cap" id="t-fast-cap">' + esc(cap) + '</p>' +
       '<p class="tc-big" id="t-fast-value">' + val + '</p>' +
-      gaugeBlock(s.pct, { id: 't-fast-bar', runId: 't-fast-run' }) +
-      '<div class="tc-meta"><span id="t-fast-elapsed">단식 ' + esc(s.elapsedText) + ' 경과</span><span id="t-fast-pct">' + s.pct + '%</span></div>' +
-      '<p class="tc-sub" id="t-fast-min">' + minLine + '</p>' +
-      '<p class="tc-note" id="t-fast-note">' + esc('2~4주차는 18~24시간 안에서 유연하게 봐요. 단식 중엔 물·허브티만, 영양제는 쉬어가요.') + '</p>' +
+      gaugeBlock(pct, { id: 't-fast-bar', runId: 't-fast-run' }) +
+      '<div class="tc-meta"><span id="t-fast-elapsed">단식 ' + esc(elapsedText) + (s.mealChecked ? ' 완료' : ' 경과') + '</span><span id="t-fast-pct">' + pct + '%</span></div>' +
+      '<p class="tc-sub" id="t-fast-min">' + esc(minLine) + '</p>' +
+      '<p class="tc-note" id="t-fast-note">' + esc(s.mealChecked
+        ? '단식 종료 시각을 기록했어요. 여기서부터 다음 식사까지 공복이 이어져요.'
+        : '2~4주차는 18~24시간 안에서 유연하게 봐요. 단식 중엔 물·허브티만, 영양제는 쉬어가요.') + '</p>' +
+      mealCheckRow({
+        kind: 'breakfast', checked: !!s.mealChecked, clock: s.fastEndClock, label: '단식 종료 시각',
+        hint: '단식일이라 지금 시각을 단식 종료로 저장해요'
+      }) +
       '<label class="time-row"><span>전날 마지막 식사</span><input type="time" data-field="fastPrevMeal" value="' + esc(s.prevMeal) + '" aria-label="전날 마지막 식사 시각"></label>' +
       '<p class="tc-src" id="t-fast-src">' + esc(srcText) + '</p>' +
       '<button class="btn ghost sm block fast-move-btn" data-act="open-fast-move" data-day="' + s.day + '">단식일 바꾸기</button>' +
@@ -453,12 +507,18 @@
     var t = d.dinner;
     if (!t) return '';
     var cap = t.done ? '마감 시각이 지났어요' : '저녁 식사는 ' + t.deadlineClock + '까지';
-    var val = t.done
-      ? '<span class="big-num">마감 ' + esc(t.overText) + ' 지났어요</span>'
-      : '<span class="big-num">' + esc(t.leftText) + '</span> <em>남았어요</em>';
-    var note = t.done
-      ? '취침 ' + t.bedClock + ' ' + t.offsetHours + '시간 전(' + t.deadlineClock + ')을 넘었어요. 다음엔 조금 더 일찍 먹어봐요.'
-      : t.label + '을 취침 ' + t.offsetHours + '시간 전(' + t.deadlineClock + ')까지 끝내요.';
+    var val, note;
+    if (t.mealChecked) {
+      val = '<span class="big-num">' + esc(t.dinnerAt) + '</span> <em>저녁 식사 시작</em>';
+      note = '여기서부터 공복이 시작돼요 · 다음 날 공복 타이머도 이 시각부터 계산해요.';
+    } else {
+      val = t.done
+        ? '<span class="big-num">마감 ' + esc(t.overText) + ' 지났어요</span>'
+        : '<span class="big-num">' + esc(t.leftText) + '</span> <em>남았어요</em>';
+      note = t.done
+        ? '취침 ' + t.bedClock + ' ' + t.offsetHours + '시간 전(' + t.deadlineClock + ')을 넘었어요. 다음엔 조금 더 일찍 먹어봐요.'
+        : t.label + '을 취침 ' + t.offsetHours + '시간 전(' + t.deadlineClock + ')까지 끝내요.';
+    }
     var modes = ['shake', 'meal'].map(function (k) {
       var m = M.dinnerModes[k];
       var on = t.mode === k;
@@ -475,6 +535,10 @@
       gaugeBlock(t.pct, { id: 't-dinner-bar', runId: 't-dinner-run', cls: 'amber' }) +
       '<div class="tc-meta"><span id="t-dinner-meta">취침 ' + esc(t.bedClock) + ' · ' + t.offsetHours + '시간 전</span><span id="t-dinner-pct">' + t.pct + '%</span></div>' +
       '<p class="tc-note" id="t-dinner-note">' + esc(note) + '</p>' +
+      mealCheckRow({
+        kind: 'dinner', checked: !!t.mealChecked, clock: t.dinnerAt, label: '저녁 식사 시작 시각',
+        hint: '누르면 지금 시각을 저장 · 다음 날 공복 타이머에 자동 반영'
+      }) +
       '<div class="segmented dinner-mode" role="tablist">' + modes + '</div>' +
     '</article>';
   }
@@ -648,17 +712,11 @@
         '<button class="link-btn" data-act="open-fast-move" data-day="' + d.day + '">단식일 바꾸기</button></div>'
       : '');
 
-    var timers;
-    if (fast && d.fast24) {
-      /* 단식일이면 오늘이 아니어도 24시간 타이머를 그 날짜 기준으로 보여준다 */
-      timers = '<div class="timer-grid">' + timerCardFasting(d) +
-        (d.isToday ? timerCardDinner(d) + timerCardSleep(d) : '') + '</div>' +
-        (d.isToday ? '' : '<p class="note-line">단식일 24시간 타이머를 ' + esc(M.fmtLong(d.date)) + ' 기준으로 보여드려요. 오늘 화면에서는 1초마다 갱신됩니다.</p>');
-    } else if (d.isToday) {
-      timers = '<div class="timer-grid">' + timerCardFasting(d) + timerCardDinner(d) + timerCardSleep(d) + '</div>';
-    } else {
-      timers = '<p class="note-line">공복·저녁식사·수면 타이머는 오늘 화면에서 실시간으로 보여요.</p>';
-    }
+    /* 타이머 3개(공복 · 마지막 저녁식사 · 수면)는 어느 날짜를 보든 항상 함께 보여준다.
+     * 단식일이면 공복 카드가 24시간 단식 타이머로 바뀐다.
+     * 오늘이 아닌 날짜에서는 지금 시간 기준으로 계산된 값이라 안내 문구를 붙인다. */
+    var timers = '<div class="timer-grid">' + timerCardFasting(d) + timerCardDinner(d) + timerCardSleep(d) + '</div>' +
+      (d.isToday ? '' : '<p class="note-line">' + esc(M.fmtLong(d.date)) + ' 날짜를 보는 중이에요. 타이머는 지금 시간 기준으로 보여드려요.</p>');
 
     var quote = quoteBanner(d.quote, d.day);
     var foods = foodBar(d);
@@ -1106,10 +1164,12 @@
         (calc ? '<em class="prot-calc">현재 체중 기준 ' + calc + '</em>' : '') + '</p></div>';
     }).join('');
     return '<section class="card guide-card">' +
-      '<div class="card-head"><h2>단백질셰이크 선택 기준</h2><span class="hint">' +
-        (weight ? '현재 체중 ' + weight.toFixed(1) + 'kg 기준' : '체중을 기록하면 권장량을 계산해드려요') + '</span></div>' +
+      '<div class="card-head"><h2>단백질쉐이크 선택 기준</h2></div>' +
       '<div class="detox-grid">' + shake + '</div>' +
-      '<div class="food-group"><h3>하루 단백질 섭취 권장량</h3><div class="detox-grid">' + intake + '</div></div>' +
+      '<div class="food-group"><h3>하루 단백질 섭취 권장량</h3>' +
+        '<p class="hint prot-weight" id="prot-weight-line">' +
+          (weight ? '현재 체중 ' + weight.toFixed(1) + 'kg 기준' : '체중을 기록하면 권장량을 계산해드려요') + '</p>' +
+        '<div class="detox-grid">' + intake + '</div></div>' +
       '<p class="note-line">감량기에는 1.2~1.6g/kg를 기본으로, 운동량이 많으면 최대 2g/kg까지예요.</p>' +
     '</section>';
   }
@@ -1517,7 +1577,7 @@
           '<label class="field"><span>유형</span><select class="input" name="type">' + typeOpts + '</select></label>' +
           '<label class="field"><span>카테고리</span><select class="input" name="category">' + catOpts + '</select></label>' +
         '</div>' +
-        '<label class="field"><span>제품명</span><input class="input" name="title" maxlength="60" placeholder="예: 단백질 쉐이크 2주 세트" value="' + esc(p.title || '') + '" required></label>' +
+        '<label class="field"><span>제품명</span><input class="input" name="title" maxlength="60" placeholder="예: 단백질쉐이크 2주 세트" value="' + esc(p.title || '') + '" required></label>' +
         '<label class="field"><span>한 줄 메모</span><input class="input" name="memo" maxlength="80" placeholder="예: 순탄수 15g↓ · 1회 20g 단백질" value="' + esc(p.memo || '') + '"></label>' +
         '<label class="field"><span>혜택 · 할인코드</span><input class="input" name="benefit" maxlength="80" placeholder="예: 참여코드 입력 시 10% 할인" value="' + esc(p.benefit || '') + '"></label>' +
         '<label class="field"><span>링크 URL</span><input class="input" name="link" inputmode="url" placeholder="https://..." value="' + esc(p.link || '') + '" required></label>' +

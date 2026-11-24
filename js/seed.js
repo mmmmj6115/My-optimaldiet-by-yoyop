@@ -124,7 +124,7 @@
         id: 'pr1',
         type: 'groupbuy',
         category: 'shake',
-        title: '단백질 쉐이크 2주 세트',
+        title: '단백질쉐이크 2주 세트',
         memo: '순탄수 15g↓ · 1회 20g 단백질',
         benefit: '참여코드 입력 시 10% 할인',
         link: 'https://example.com/groupbuy/shake',

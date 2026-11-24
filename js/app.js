@@ -285,11 +285,11 @@
       deltas: deltas,
       body: M.latestValues(p, day, ['weight', 'fat', 'visceral']),
       prefs: prefs,
-      fasting: M.fastingState(prefs.lastMeal, now, Program.check.fastingHours),
+      fasting: M.fastingDayState(p, day, now, Program.check.fastingHours),
       fast24: M.fast24State(p, day, now, Program.check.fast24Hours),
       fastPrev: M.fastPrevMeal(p, day),
       sleep: M.sleepState(prefs.wake, now, Program.check.sleepHours),
-      dinner: M.dinnerState(prefs.wake, now, M.dinnerMode(p, day)),
+      dinner: M.dinnerDayState(p, day, now, M.dinnerMode(p, day)),
       quote: M.quoteFor(day),
       fast: M.isFastDay(plan),
       photos: (entry && entry.photos) || {},
@@ -520,10 +520,18 @@
   /* 타이머 시각(마지막 식사 · 기상 목표)은 참여자 설정으로 저장해 매일 써요 */
   function paintDinner(t) {
     if (!t) return;
-    setHtmlIfChanged($('t-dinner-cap'), t.done ? '마감 시각이 지났어요' : '저녁 식사는 ' + t.deadlineClock + '까지');
-    setHtmlIfChanged($('t-dinner-value'), t.done
-      ? '<span class="big-num">마감 ' + Views.esc(t.overText) + ' 지났어요</span>'
-      : '<span class="big-num">' + Views.esc(t.leftText) + '</span> <em>남았어요</em>');
+    setHtmlIfChanged($('t-dinner-cap'), Views.esc(t.done ? '마감 시각이 지났어요' : '저녁 식사는 ' + t.deadlineClock + '까지'));
+    if (t.mealChecked) {
+      setHtmlIfChanged($('t-dinner-value'), '<span class="big-num">' + Views.esc(t.dinnerAt) + '</span> <em>저녁 식사 시작</em>');
+      setHtmlIfChanged($('t-dinner-note'), Views.esc('여기서부터 공복이 시작돼요 · 다음 날 공복 타이머도 이 시각부터 계산해요.'));
+    } else {
+      setHtmlIfChanged($('t-dinner-value'), t.done
+        ? '<span class="big-num">마감 ' + Views.esc(t.overText) + ' 지났어요</span>'
+        : '<span class="big-num">' + Views.esc(t.leftText) + '</span> <em>남았어요</em>');
+      setHtmlIfChanged($('t-dinner-note'), Views.esc(t.done
+        ? '취침 ' + t.bedClock + ' ' + t.offsetHours + '시간 전(' + t.deadlineClock + ')을 넘었어요. 다음엔 조금 더 일찍 먹어봐요.'
+        : t.label + '을 취침 ' + t.offsetHours + '시간 전(' + t.deadlineClock + ')까지 끝내요.'));
+    }
     setHtmlIfChanged($('t-dinner-state'), Views.esc(t.emoji + ' ' + t.tag));
     setHtmlIfChanged($('t-dinner-meta'), '취침 ' + t.bedClock + ' · ' + t.offsetHours + '시간 전');
     setHtmlIfChanged($('t-dinner-pct'), t.pct + '%');
@@ -566,6 +574,67 @@
       toast(key === 'lastMeal' ? '마지막 식사 시각을 ' + norm + '으로 저장했어요' : '기상 목표를 ' + norm + '으로 저장했어요');
     } catch (e) {
       toast('저장하지 못했어요: ' + e.message, 'error');
+    }
+  }
+
+  /* 아침 식사 · 저녁 식사 체크: 누른 순간의 시각을 그 날 기록에 남긴다 */
+  async function toggleMealClock(kind) {
+    var p = state.participant;
+    if (!p) return;
+    var day = viewDay();
+    var entry = M.getEntry(p, day) || {};
+    var field = kind === 'breakfast' ? 'breakfastAt' : 'lastMealAt';
+    var saved = M.hmToMinutes(entry[field]) !== null ? M.normHM(entry[field], '') : null;
+    if (saved) {
+      var off = {};
+      off[field] = null;
+      await updateEntry(off);
+      if (kind === 'dinner') await clearDayLastMeal(day);
+      toast(kind === 'breakfast' ? '아침 식사 기록을 지웠어요' : '저녁 식사 기록을 지웠어요');
+      return;
+    }
+    await saveMealClock(kind, M.clockOf(new Date()));
+  }
+
+  async function clearDayLastMeal(day) {
+    var p = state.participant;
+    if (!p) return;
+    var settings = Object.assign({}, p.settings || {});
+    if (!settings.lastMeals || typeof settings.lastMeals !== 'object') return;
+    if (!Object.prototype.hasOwnProperty.call(settings.lastMeals, String(day))) return;
+    settings.lastMeals[String(day)] = null;
+    try {
+      var updated = await store.updateParticipant(p.id, { settings: settings });
+      applyParticipant(updated);
+      render();
+    } catch (e) { /* 해제 실패는 아래 토스트로만 알린다 */ }
+  }
+
+  async function saveMealClock(kind, hm) {
+    var p = state.participant;
+    if (!p) return;
+    var day = viewDay();
+    var norm = M.normHM(hm, '');
+    if (!norm) { toast('시각을 확인해주세요', 'error'); return; }
+    var patch = {};
+    patch[kind === 'breakfast' ? 'breakfastAt' : 'lastMealAt'] = norm;
+    await updateEntry(patch);
+    if (kind === 'dinner') {
+      /* 그 날의 마지막 식사 시각을 설정에도 남겨 다음 날 공복·단식 타이머가 그대로 쓴다 */
+      var settings = Object.assign({}, p.settings || {});
+      settings.lastMeals = Object.assign({}, (settings.lastMeals && typeof settings.lastMeals === 'object') ? settings.lastMeals : {});
+      settings.lastMeals[String(day)] = norm;
+      try {
+        var updated = await store.updateParticipant(p.id, { settings: settings });
+        applyParticipant(updated);
+        render();
+      } catch (e) {
+        toast('저장하지 못했어요: ' + e.message, 'error');
+        return;
+      }
+      toast(norm + ' 저녁 식사 시작으로 저장했어요 · 다음 날 공복 타이머에 반영돼요');
+    } else {
+      toast(norm + ' 아침 식사로 저장했어요');
     }
   }
 
@@ -613,16 +682,32 @@
     if (goal && 'textContent' in goal) goal.textContent = pct >= 100 ? '🏆' : '🏁';
   }
 
-  function paintFasting(f, f24) {
+  function paintFasting(f) {
     if (!f) return;
-    setHtmlIfChanged($('t-fast-cap'), f.done ? '공복 ' + f.hours + '시간 달성' : '공복 ' + f.hours + '시간까지');
-    setHtmlIfChanged($('t-fast-value'), f.done
-      ? '<span class="big-num">' + f.hours + '시간 공복 달성!</span> 🎉'
-      : '<span class="big-num">' + Views.esc(f.leftText) + '</span> <em>남았어요</em>');
-    setHtmlIfChanged($('t-fast-state'), f.done ? '달성' : '진행 중');
-    setHtmlIfChanged($('t-fast-elapsed'), '공복 ' + Views.esc(f.elapsedText) + ' 경과');
+    var cap, val, pill, metaLeft, note;
+    if (f.mealChecked) {
+      cap = '아침 식사 시각을 기록했어요 · 공복 ' + f.hours + '시간 기준';
+      val = '<span class="big-num">공복 ' + Views.esc(f.heldText) + ' 완료</span> <em>· ' + Views.esc(f.breakfastAt) + ' 아침 식사</em>';
+      pill = f.heldDone ? '달성' : '기록 완료';
+      metaLeft = '공복 ' + Views.esc(f.heldText) + ' 유지';
+      note = f.heldDone
+        ? f.hours + '시간 목표를 채웠어요. 다음 식사 전까지 공복이 이어져요.'
+        : f.hours + '시간까지 ' + f.heldShortText + ' 모자랐어요. 다음엔 마지막 식사를 조금 더 일찍 마쳐봐요.';
+    } else {
+      cap = f.done ? '공복 ' + f.hours + '시간 달성' : '공복 ' + f.hours + '시간까지';
+      val = f.done
+        ? '<span class="big-num">' + f.hours + '시간 공복 달성!</span> 🎉'
+        : '<span class="big-num">' + Views.esc(f.leftText) + '</span> <em>남았어요</em>';
+      pill = f.done ? '달성' : '진행 중';
+      metaLeft = '공복 ' + Views.esc(f.elapsedText) + ' 경과';
+      note = (f.startToday ? '오늘 ' : '어제 ') + f.startClock + ' 마지막 식사 · ' + f.hours + '시간 공복까지';
+    }
+    setHtmlIfChanged($('t-fast-cap'), Views.esc(cap));
+    setHtmlIfChanged($('t-fast-value'), val);
+    setHtmlIfChanged($('t-fast-state'), Views.esc(pill));
+    setHtmlIfChanged($('t-fast-elapsed'), metaLeft);
     setHtmlIfChanged($('t-fast-pct'), f.pct + '%');
-    setHtmlIfChanged($('t-fast-note'), Views.esc((f.startToday ? '오늘 ' : '어제 ') + f.startClock + ' 마지막 식사 · ' + f.hours + '시간 공복까지'));
+    setHtmlIfChanged($('t-fast-note'), Views.esc(note));
     setWidth('t-fast-bar', f.pct);
     setRunner('t-fast-run', f.pct);
   }
@@ -630,28 +715,48 @@
   /* 단식일 24시간 타이머 1초 갱신 */
   function paintFasting24(s) {
     if (!s) return;
-    var cap = (s.isViewToday ? '전날 ' : M.fmtShort(s.startDate) + ' ') + s.startClock + ' 마지막 식사 → ' +
-      (s.isViewToday ? '오늘 ' : M.fmtShort(s.endDate) + ' ') + s.endClock + '까지 (' + s.hours + '시간)';
+    var cap, val, pill, minLine, pct, elapsedText;
+    if (s.mealChecked) {
+      cap = '단식 종료 시각을 기록했어요 · ' + s.hours + '시간 창 기준';
+      val = '<span class="big-num">단식 ' + Views.esc(s.heldText) + ' 완료</span> <em>· ' + Views.esc(s.fastEndClock) + ' 단식 종료</em>';
+      pill = s.heldDone ? '달성' : (s.heldMinPassed ? '최소 기준 통과' : '단식 종료');
+      minLine = s.heldDone
+        ? s.minHours + '시간 최소 기준 통과 ✓ · ' + s.hours + '시간 채웠어요 🏆'
+        : (s.heldMinPassed
+          ? s.minHours + '시간 최소 기준 통과 ✓ · ' + s.hours + '시간까지 ' + Views.esc(s.heldFullShortText) + ' 남았어요'
+          : s.minHours + '시간 최소 기준까지 ' + Views.esc(s.heldMinShortText) + ' 남았어요');
+      pct = Math.max(0, Math.min(100, Math.round((s.heldMinutes / (s.hours * 60)) * 100)));
+      elapsedText = s.heldText;
+    } else {
+      cap = (s.isViewToday ? '전날 ' : M.fmtShort(s.startDate) + ' ') + s.startClock + ' 마지막 식사 → ' +
+        (s.isViewToday ? '오늘 ' : M.fmtShort(s.endDate) + ' ') + s.endClock + '까지 (' + s.hours + '시간)';
+      val = (s.done && s.isPast)
+        ? '<span class="big-num">' + s.hours + '시간 창이 끝났어요</span>'
+        : (s.done
+          ? '<span class="big-num">' + s.hours + '시간 단식 달성!</span> 🏆'
+          : (s.beforeStart
+            ? '<span class="big-num">' + s.startClock + '</span> <em>부터 시작해요</em>'
+            : '<span class="big-num">' + Views.esc(s.leftText) + '</span> <em>남았어요</em>'));
+      pill = s.isPast ? '지난 단식일' : (s.done ? '달성' : (s.beforeStart ? '시작 전' : (s.minPassed ? s.minHours + '시간 통과' : '진행 중')));
+      if (s.isPast) minLine = s.minHours + '시간 최소 기준 · ' + s.hours + '시간 창이 이미 지난 날이에요';
+      else if (s.done) minLine = s.minHours + '시간 최소 기준 통과 ✓ · ' + s.hours + '시간 달성 🏆';
+      else if (s.beforeStart) minLine = s.minHours + '시간 최소 기준 · 시작 후 ' + s.minHours + '시간이면 통과예요';
+      else if (s.minPassed) minLine = s.minHours + '시간 최소 기준 통과 ✓ · ' + s.hours + '시간까지 ' + Views.esc(s.leftText) + ' 남았어요';
+      else minLine = s.minHours + '시간 최소 기준까지 ' + Views.esc(s.minLeftText) + ' 남았어요';
+      pct = s.pct;
+      elapsedText = s.elapsedText;
+    }
     setHtmlIfChanged($('t-fast-cap'), Views.esc(cap));
-    setHtmlIfChanged($('t-fast-value'), (s.done && s.isPast)
-      ? '<span class="big-num">' + s.hours + '시간 창이 끝났어요</span>'
-      : (s.done
-        ? '<span class="big-num">' + s.hours + '시간 단식 달성!</span> 🏆'
-        : (s.beforeStart
-          ? '<span class="big-num">' + s.startClock + '</span> <em>부터 시작해요</em>'
-          : '<span class="big-num">' + Views.esc(s.leftText) + '</span> <em>남았어요</em>')));
-    setHtmlIfChanged($('t-fast-state'), Views.esc(s.isPast ? '지난 단식일' : (s.done ? '달성' : (s.beforeStart ? '시작 전' : (s.minPassed ? s.minHours + '시간 통과' : '진행 중')))));
-    setHtmlIfChanged($('t-fast-elapsed'), '단식 ' + Views.esc(s.elapsedText) + ' 경과');
-    setHtmlIfChanged($('t-fast-pct'), s.pct + '%');
-    var minLine;
-    if (s.isPast) minLine = s.minHours + '시간 최소 기준 · ' + s.hours + '시간 창이 이미 지난 날이에요';
-    else if (s.done) minLine = s.minHours + '시간 최소 기준 통과 ✓ · ' + s.hours + '시간 달성 🏆';
-    else if (s.beforeStart) minLine = s.minHours + '시간 최소 기준 · 시작 후 ' + s.minHours + '시간이면 통과예요';
-    else if (s.minPassed) minLine = s.minHours + '시간 최소 기준 통과 ✓ · ' + s.hours + '시간까지 ' + Views.esc(s.leftText) + ' 남았어요';
-    else minLine = s.minHours + '시간 최소 기준까지 ' + Views.esc(s.minLeftText) + ' 남았어요';
-    setHtmlIfChanged($('t-fast-min'), minLine);
-    setWidth('t-fast-bar', s.pct);
-    setRunner('t-fast-run', s.pct);
+    setHtmlIfChanged($('t-fast-value'), val);
+    setHtmlIfChanged($('t-fast-state'), Views.esc(pill));
+    setHtmlIfChanged($('t-fast-elapsed'), '단식 ' + Views.esc(elapsedText) + (s.mealChecked ? ' 완료' : ' 경과'));
+    setHtmlIfChanged($('t-fast-pct'), pct + '%');
+    setHtmlIfChanged($('t-fast-min'), Views.esc(minLine));
+    setHtmlIfChanged($('t-fast-note'), Views.esc(s.mealChecked
+      ? '단식 종료 시각을 기록했어요. 여기서부터 다음 식사까지 공복이 이어져요.'
+      : '2~4주차는 18~24시간 안에서 유연하게 봐요. 단식 중엔 물·허브티만, 영양제는 쉬어가요.'));
+    setWidth('t-fast-bar', pct);
+    setRunner('t-fast-run', pct);
   }
 
   function paintSleep(s) {
@@ -677,10 +782,10 @@
     if (M.isFastDay(M.getPlan(state.participant, day))) {
       paintFasting24(M.fast24State(state.participant, day, nowD, Program.check.fast24Hours));
     } else {
-      paintFasting(M.fastingState(prefs.lastMeal, nowD, Program.check.fastingHours));
+      paintFasting(M.fastingDayState(state.participant, day, nowD, Program.check.fastingHours));
     }
     paintSleep(M.sleepState(prefs.wake, nowD, Program.check.sleepHours));
-    paintDinner(M.dinnerState(prefs.wake, nowD, M.dinnerMode(state.participant, day)));
+    paintDinner(M.dinnerDayState(state.participant, day, nowD, M.dinnerMode(state.participant, day)));
   }
 
   async function saveWeeklyMetric(wk, metric, raw) {
@@ -1155,10 +1260,18 @@
         await updateEntry({ water: Math.max(0, (e5.water || 0) - 1) });
         break;
       }
+      case 'check-breakfast': {
+        await toggleMealClock('breakfast');
+        break;
+      }
+      case 'check-dinner': {
+        await toggleMealClock('dinner');
+        break;
+      }
       case 'dinner-mode': {
         var dm = el.getAttribute('data-value');
         if (dm !== 'shake' && dm !== 'meal') break;
-        await saveSetting('dinnerMode', dm, dm === 'shake' ? '저녁식사 기준을 셰이크(-2시간)로 바꿨어요' : '저녁식사 기준을 무탄·저탄(-4시간)으로 바꿨어요');
+        await saveSetting('dinnerMode', dm, dm === 'shake' ? '저녁식사 기준을 쉐이크(-2시간)로 바꿨어요' : '저녁식사 기준을 무탄·저탄(-4시간)으로 바꿨어요');
         break;
       }
       case 'save-memo': {
@@ -1449,6 +1562,17 @@
     }
     if (field === 'fastPrevMeal') {
       await saveFastPrevMeal(el.value);
+      return;
+    }
+    if (field === 'breakfastAt' || field === 'dinnerAt') {
+      if (!el.value) {
+        var off = {};
+        off[field === 'breakfastAt' ? 'breakfastAt' : 'lastMealAt'] = null;
+        await updateEntry(off);
+        if (field === 'dinnerAt') await clearDayLastMeal(viewDay());
+        return;
+      }
+      await saveMealClock(field === 'breakfastAt' ? 'breakfast' : 'dinner', el.value);
       return;
     }
     if (field === 'memo') {
