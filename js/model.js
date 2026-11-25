@@ -1129,6 +1129,12 @@
     var nowD = now ? new Date(now.getTime ? now.getTime() : now) : new Date();
     var t = dinnerState(timerPrefs(p).wake, nowD, mode);
     if (!t) return null;
+    /* 4주차 저녁은 저탄수식, 2·3주차 저녁은 무탄수식 — 타이머 안내도 그날 저녁 표기를 따른다 */
+    if (t.mode === 'meal') {
+      var dt = (getPlan(p, d) || {}).dinner;
+      if (dt === 'LOW') t.label = '저탄수식 저녁';
+      else if (dt === 'ZERO') t.label = '무탄수식 저녁';
+    }
     var e = getEntry(p, d) || {};
     t.dinnerAt = hmToMinutes(e.lastMealAt) !== null ? normHM(e.lastMealAt, '') : null;
     t.mealChecked = !!t.dinnerAt;
