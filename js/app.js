@@ -1514,25 +1514,37 @@
       var created = await store.createParticipant({
         name: nick, nickname: nick, startDate: old.startDate || today(), personal: true, settings: settings
       });
-      /* 인바디 수치만 이어받되, 아직 안 바꾼 샘플 수치는 가져오지 않는다 */
+      /* 데모 참여자에 섞여 있던 내 데이터만 골라 옮긴다:
+       *  - 직접 넣은 인바디 수치(아직 안 바꾼 샘플 수치는 제외) · 인증사진 · 내가 쓴 메모
+       *  - 샘플 체크 표시(끼니·물·수면 등)와 샘플 피드백은 가져오지 않는다 */
       var sample = (global.App.Seed && global.App.Seed.demoDefaults && global.App.Seed.demoDefaults.sample) || {};
-      var latest = M.latestValues(old, Program.totalDays, ['weight', 'muscle', 'fat', 'visceral']);
-      var carried = {};
-      ['weight', 'muscle', 'fat', 'visceral'].forEach(function (k) {
-        var lv = latest[k];
-        if (!lv || typeof lv.value !== 'number') return;
-        if (typeof sample[k] === 'number' && Math.abs(lv.value - sample[k]) < 0.001) return;
-        carried[k] = lv.value;
-      });
-      if (Object.keys(carried).length) {
-        var entry = { date: M.dayDate(created.startDate, 1), meals: {}, supplements: {}, exercise: {}, updatedAt: new Date().toISOString() };
-        Object.keys(carried).forEach(function (k) { entry[k] = carried[k]; });
-        created = await store.putEntry(created.id, 1, entry);
+      var sampleMemo = (global.App.Seed && global.App.Seed.demoDefaults && global.App.Seed.demoDefaults.memo) || '';
+      var oldStart = old.startDate || today();
+      var moved = 0;
+      for (var d = 1; d <= Program.totalDays; d++) {
+        var src = (old.entries || {})[String(d)];
+        if (!src) continue;
+        var next = { date: src.date || M.dayDate(oldStart, d), meals: {}, supplements: {}, exercise: {} };
+        var keep = false;
+        ['weight', 'muscle', 'fat', 'visceral'].forEach(function (k) {
+          if (typeof src[k] !== 'number') return;
+          if (typeof sample[k] === 'number' && Math.abs(src[k] - sample[k]) < 0.001) return;
+          next[k] = src[k];
+          keep = true;
+        });
+        if (src.photos && Object.keys(src.photos).length) { next.photos = src.photos; keep = true; }
+        if (src.memo && src.memo !== sampleMemo) { next.memo = src.memo; keep = true; }
+        if (!keep) continue;
+        next.updatedAt = src.updatedAt || new Date().toISOString();
+        created = await store.putEntry(created.id, d, next);
+        moved += 1;
       }
       state.session = Auth.signInDemo(created.id);
       state.participants = await store.listParticipants();
       state.participant = created;
-      toast('내 기록으로 정리했어요 · 샘플 체크는 지우고 내 인바디는 그대로 이어받았어요');
+      toast(moved
+        ? '내 기록으로 정리했어요 · 샘플 체크는 지우고 내 인바디·사진은 그대로 이어받았어요'
+        : '내 기록으로 정리했어요 · 이제 내 닉네임과 기록만 보여요');
     } catch (e) { /* 정리에 실패해도 앱은 그대로 연다 */ }
   }
 

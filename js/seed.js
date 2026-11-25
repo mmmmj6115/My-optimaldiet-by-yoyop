@@ -210,7 +210,8 @@
   /* 데모 참여자 기본값 — 개인 기록으로 옮길 때 '아직 안 바꾼 샘플 이름·수치'를 알아보는 데 쓴다 */
   var DEMO_DEFAULTS = {
     id: 'p1', name: '김유니', nickname: '유니', code: '1234',
-    sample: { weight: 61.5, muscle: 21.5, fat: 21.0, visceral: 5 }
+    sample: { weight: 61.5, muscle: 21.5, fat: 21.0, visceral: 5 },
+    memo: '오늘부터 28일 시작!'
   };
 
   global.App.Seed = { build: build, promos: promos, demoDefaults: DEMO_DEFAULTS };
