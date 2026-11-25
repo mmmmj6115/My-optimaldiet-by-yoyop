@@ -44,7 +44,8 @@
     promos: [],
     toastTimer: null,
     lastKey: '',
-    pendingActions: {}
+    pendingActions: {},
+    pendingBackup: null
   };
 
   function today() { return M.todayStr(); }
@@ -1411,6 +1412,123 @@
     }, 800);
   }
 
+  /* JSON 파일 다운로드 — 내 기록 백업 */
+  function downloadJson(filename, text) {
+    var blob = new Blob([text], { type: 'application/json;charset=utf-8' });
+    var url = (global.URL || global.webkitURL).createObjectURL(blob);
+    var a = global.document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    global.document.body.appendChild(a);
+    a.click();
+    setTimeout(function () {
+      try { (global.URL || global.webkitURL).revokeObjectURL(url); a.remove(); } catch (e) { /* 무시 */ }
+    }, 800);
+  }
+
+  /* ---------------- 내 기록 백업 · 복원 ---------------- */
+  /* 로그인한 '내 기록'(개인 참여자)만 JSON으로 내려받는다 */
+  function saveBackup() {
+    var p = state.participant;
+    var B = global.App.Backup;
+    if (!p) { toast('먼저 내 기록을 열어 주세요', 'error'); return; }
+    if (p.personal !== true) {
+      toast('내 기록(개인)에서만 백업을 만들 수 있어요 · 관리자·데모 기록은 담기지 않아요', 'error');
+      return;
+    }
+    var backup, name;
+    try {
+      backup = B.build(p);
+      name = B.fileName(p, today());
+      downloadJson(name, B.stringify(backup));
+    } catch (e) {
+      toast('백업을 만들지 못했어요: ' + e.message, 'error');
+      return;
+    }
+    toast('내 기록을 백업 파일로 저장했어요 · ' + name);
+  }
+
+  function pickBackupFile() {
+    var input = global.document.getElementById('backup-file');
+    if (!input) { toast('백업 파일을 고를 수 없어요 · 내 정보를 다시 열어주세요', 'error'); return; }
+    if (typeof input.click === 'function') input.click();
+  }
+
+  function readFileText(file) {
+    return new Promise(function (resolve, reject) {
+      if (file && typeof file.text === 'function') {
+        file.text().then(function (t) { resolve(String(t || '')); }, function () { reject(new Error('파일을 읽지 못했어요.')); });
+        return;
+      }
+      if (global.FileReader) {
+        try {
+          var fr = new global.FileReader();
+          fr.onload = function () { resolve(String(fr.result || '')); };
+          fr.onerror = function () { reject(new Error('파일을 읽지 못했어요.')); };
+          fr.readAsText(file, 'utf-8');
+          return;
+        } catch (e) { reject(new Error('파일을 읽지 못했어요.')); return; }
+      }
+      reject(new Error('이 브라우저에서는 파일을 읽을 수 없어요.'));
+    });
+  }
+
+  /* 백업 파일을 골랐을 때 — 형식을 먼저 검증하고, 유효하면 확인 시트를 띄운다 */
+  async function handleBackupFile(input) {
+    var B = global.App.Backup;
+    var file = input && input.files && input.files[0];
+    if (!file) return;
+    try { input.value = ''; } catch (e) { /* 무시 */ }
+    if (file.size && file.size > B.maxBytes) {
+      toast('백업 파일이 너무 커요 · 30MB 이하 파일만 복원할 수 있어요', 'error');
+      return;
+    }
+    var text;
+    try { text = await readFileText(file); }
+    catch (e) { toast('백업 파일을 읽지 못했어요. 파일을 다시 골라주세요.', 'error'); return; }
+    var parsed;
+    try { parsed = B.parse(text); }
+    catch (e) { toast(e.message, 'error'); return; }
+    state.pendingBackup = parsed;
+    var meta = parsed.meta;
+    var parts = [meta.nickname + ' · 시작 ' + meta.startDate, '기록 ' + meta.days + '일'];
+    if (meta.photos) parts.push('사진 ' + meta.photos + '장');
+    if (meta.rounds) parts.push('보관 회차 ' + meta.rounds + '개');
+    confirmAction('restore-backup', {
+      title: '백업에서 복원할까요?',
+      message: parts.join(' · ') + '. 지금 이 기기의 내 기록이 백업 내용으로 바뀌어요.',
+      confirmLabel: '복원',
+      icon: 'download',
+      onConfirm: restoreBackup
+    });
+  }
+
+  /* 검증된 백업을 '내 기록'에 복원하고 그 기록으로 전환한다 */
+  async function restoreBackup() {
+    var parsed = state.pendingBackup;
+    state.pendingBackup = null;
+    if (!parsed) return false;
+    var updated;
+    try {
+      updated = await store.restorePersonal(parsed.record);
+    } catch (e) {
+      toast('복원하지 못했어요 · 저장 공간을 확인한 뒤 다시 시도해 주세요', 'error');
+      return false;
+    }
+    state.session = Auth.signInDemo(updated.id);
+    state.participant = updated;
+    state.day = null;
+    state.reportRound = null;
+    closeSheet();
+    try {
+      state.participants = await store.listParticipants();
+    } catch (e) { /* 목록 갱신 실패는 화면 렌더에 맡긴다 */ }
+    go(!M.tutorialDone(updated) ? 'tutorial' : 'today');
+    render();
+    toast('백업에서 기록을 복원했어요');
+    return true;
+  }
+
   /* 28일 최종 리포트 PNG 저장 — 순수 브라우저 Canvas (외부 CDN 없음) */
   function saveReportImage() {
     var p = state.participant;
@@ -1658,6 +1776,8 @@
         break;
       }
       case 'signout': await signOut(); break;
+      case 'backup-save': saveBackup(); break;
+      case 'backup-restore': pickBackupFile(); break;
       case 'tutorial-start': await saveTutorial(global.document.getElementById('tutorial-form'), true); break;
       case 'tut-gender': setTutorialGender(el.getAttribute('data-value')); break;
 
@@ -2046,6 +2166,11 @@
 
   async function onChange(e) {
     var el = e.target;
+
+    if (el.matches && el.matches('[data-backup-file]')) {
+      await handleBackupFile(el);
+      return;
+    }
 
     if (el.matches && el.matches('[data-photo]')) {
       await handlePhotoInput(el);

@@ -1125,6 +1125,15 @@ h1, h2, h3, p { margin: 0; }
 .profile-rows { display: grid; gap: 1px; background: var(--line); border-radius: 12px; overflow: hidden; margin-bottom: 12px; }
 .profile-rows > div { display: flex; justify-content: space-between; padding: 10px 12px; background: #fff; font-size: 12.5px; }
 .profile-rows span { color: var(--muted); }
+/* 내 정보 — 내 기록 백업 · 복원 */
+.backup-box { margin: 10px 0 4px; padding: 12px; border: 1px dashed var(--line); border-radius: 14px; background: var(--surface-2); text-align: left; }
+.backup-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 13.5px; font-weight: 700; color: var(--ink); }
+.backup-head .ic { width: 16px; height: 16px; color: var(--brand); }
+.backup-box .hint { margin: 0 0 10px; line-height: 1.5; }
+.backup-actions { display: flex; gap: 8px; }
+.backup-actions .btn { flex: 1; min-width: 0; padding: 0 8px; font-size: 12.5px; }
+.backup-note { margin: 8px 0 0; }
+#sheet .backup-box + .btn.block { margin-top: 10px; }
 .confirm { text-align: center; padding: 6px 2px 2px; }
 .confirm-ic { display: grid; place-items: center; width: 50px; height: 50px; border-radius: 16px; background: var(--brand-soft); color: var(--brand); margin: 0 auto 12px; }
 .confirm-ic.warn { background: var(--amber-soft); color: var(--amber); }

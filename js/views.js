@@ -2132,6 +2132,8 @@
     var round = d.round || M.roundNumber(p);
     var metaLine = (p.code && !p.personal ? '참여코드 ' + esc(p.code) + ' · ' : '') + '시작 ' + esc(p.startDate);
     var progress = d.currentDay ? 'Day ' + d.currentDay + ' / 28' : '시작 전';
+    var personal = !!p.personal;
+    var personalNote = d.role === 'admin' ? '관리자 화면' : (d.provider === 'code' ? '참여코드 참여 기록' : '데모 기록');
     return sheetWrap(
       sheetHead('내 정보') +
       '<div class="profile-head"><span class="avatar lg">' + esc(String(title).slice(0, 1)) + '</span>' +
@@ -2149,6 +2151,16 @@
       '</form>' +
       '<button class="btn outline block" data-act="open-round">🔄 다음 회차(' + (round + 1) + '차) 시작하기</button>' +
       (d.role === 'admin' ? '<button class="btn outline block" data-act="nav" data-route="admin">관리자 대시보드 열기</button>' : '') +
+      '<div class="backup-box" id="backup-box">' +
+        '<div class="backup-head">' + icon('download') + '<b>내 기록 백업 · 복원</b></div>' +
+        '<p class="hint">폰을 바꾸거나 브라우저 캐시를 지우기 전에 백업해 두면 1차~N차 기록과 사진까지 그대로 복원할 수 있어요.</p>' +
+        '<div class="backup-actions">' +
+          '<button type="button" class="btn primary sm" data-act="backup-save">내 기록 백업 저장</button>' +
+          '<button type="button" class="btn ghost sm" data-act="backup-restore">백업 파일에서 복원</button>' +
+        '</div>' +
+        '<input type="file" id="backup-file" data-backup-file accept=".json,application/json" hidden>' +
+        (personal ? '' : '<p class="hint backup-note">지금은 ' + esc(personalNote) + '이라 내 백업을 만들 수 없어요. 백업 파일에서 복원하면 이 기기의 내 기록으로 열려요.</p>') +
+      '</div>' +
       '<button class="btn ghost block" data-act="signout">계정 전환 / 로그아웃</button>' +
       '<p class="hint center">' + esc(Program.name) + ' · v' + esc(Program.version) + '</p>'
     );

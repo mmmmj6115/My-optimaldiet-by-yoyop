@@ -128,6 +128,39 @@
         return clone(list[i]);
       },
 
+      /* 백업 파일에서 '내 기록'(개인 참여자)을 통째로 되돌린다.
+       * 한 번의 저장으로 끝내므로 실패하면 기존 기록이 그대로 남는다. */
+      async restorePersonal(record) {
+        var list = participants();
+        var idx = -1;
+        for (var i = 0; i < list.length; i++) {
+          if (list[i] && list[i].personal) { idx = i; break; }
+        }
+        var current = idx >= 0 ? list[idx] : null;
+        var next = current ? Object.assign({}, current) : {
+          id: makeId('p'),
+          name: '',
+          nickname: '',
+          code: '',
+          startDate: '',
+          createdAt: nowIso(),
+          settings: {},
+          planOverrides: {},
+          entries: {},
+          feedback: [],
+          rounds: []
+        };
+        Object.keys(record || {}).forEach(function (k) { next[k] = clone(record[k]); });
+        /* 기기 안의 신원( id · 이 기기 개인 표시 )은 그대로 둔다 */
+        next.id = current ? current.id : makeId('p');
+        next.code = '';
+        next.personal = true;
+        next.createdAt = next.createdAt || nowIso();
+        if (idx >= 0) list[idx] = next; else list.push(next);
+        write(K.participants, list);
+        return clone(next);
+      },
+
       async putEntry(id, dayNumber, entry) {
         var list = participants();
         var i = find(list, id);
@@ -245,6 +278,7 @@
    *  GET    {base}/participants/:id
    *  POST   {base}/participants                       { name, code, startDate }
    *  PATCH  {base}/participants/:id                   { ...patch }
+   *  PUT    {base}/participants?personal=1            { ...backup record }  (내 기록 백업 복원)
    *  PUT    {base}/participants/:id/entries/:day      entry
    *  PATCH  {base}/participants/:id/plans/:day        { meals } | { meals: null }
    *  POST   {base}/participants/:id/feedback          { day, text }
@@ -287,6 +321,7 @@
       createParticipant(data) { return request('/participants', { method: 'POST', body: data }); },
       getPersonal() { return request('/participants?personal=1').then(function (r) { return (r || [])[0] || null; }); },
       updateParticipant(id, patch) { return request('/participants/' + encodeURIComponent(id), { method: 'PATCH', body: patch }); },
+      restorePersonal(record) { return request('/participants?personal=1', { method: 'PUT', body: record }); },
       putEntry(id, day, entry) { return request('/participants/' + encodeURIComponent(id) + '/entries/' + day, { method: 'PUT', body: entry }); },
       setPlanOverride(id, day, meals) { return request('/participants/' + encodeURIComponent(id) + '/plans/' + day, { method: 'PATCH', body: { meals: meals } }); },
       addFeedback(id, data) { return request('/participants/' + encodeURIComponent(id) + '/feedback', { method: 'POST', body: data }); },
