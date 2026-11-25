@@ -434,6 +434,7 @@
     var nick = nickEl ? String(nickEl.value || '').trim().slice(0, 12) : '';
     var n = M.roundNumber(p);
     try {
+      var keepSummary = M.roundSummary(p, n, today());
       var rounds = (p.rounds || []).slice();
       rounds.push({
         round: n,
@@ -442,6 +443,11 @@
         entries: JSON.parse(JSON.stringify(p.entries || {})),
         planOverrides: JSON.parse(JSON.stringify(p.planOverrides || {})),
         feedback: JSON.parse(JSON.stringify(p.feedback || [])),
+        /* 보관 시점의 리포트 요약도 함께 남긴다 */
+        summary: keepSummary ? {
+          rate: keepSummary.rate, recorded: keepSummary.recorded, perfect: keepSummary.perfect,
+          weight: keepSummary.weight, fat: keepSummary.fat
+        } : null,
         archivedAt: new Date().toISOString()
       });
       /* 이어받기: 닉네임·성별·생리주기 + 직전 최신 인바디. Day 기준 타이머 값은 새로 시작 */
