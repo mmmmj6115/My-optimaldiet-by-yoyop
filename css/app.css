@@ -141,6 +141,7 @@ h1, h2, h3, p { margin: 0; }
 }
 .chip.sm { height: 20px; font-size: 11px; padding: 0 7px; }
 .tone-shake { background: var(--brand-soft); color: #1B6B50; }
+.tone-normal { background: var(--amber-soft); color: #9A5E17; }
 .tone-low { background: var(--blue-soft); color: #2A5E96; }
 .tone-zero { background: var(--violet-soft); color: #54479B; }
 .tone-fast { background: var(--coral-soft); color: #A8432C; }

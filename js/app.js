@@ -1867,7 +1867,8 @@
       case 'plan-fast': {
         var s = state.sheet;
         if (!s || s.type !== 'plan') return;
-        var dInner = s.draft.dinner === 'FAST' ? 'ZERO' : s.draft.dinner;
+        /* 4주차 단식일의 저녁은 저탄수식(밥 2/3공기) — 2·3주차만 무탄수식 */
+        var dInner = Number(s.day) >= 22 ? 'LOW' : (s.draft.dinner === 'FAST' ? 'ZERO' : s.draft.dinner);
         s.draft = { breakfast: 'FAST', lunch: 'FAST', snack: 'FAST', dinner: dInner };
         s.conflict = M.riskConsecutiveFast(state.participant, s.day, s.draft);
         renderSheet();

@@ -1740,7 +1740,7 @@
         return '<div class="tut-period">' +
           '<div class="tut-period-head"><span class="wk-badge">' + esc(p.badge) + '</span><b>' + esc(p.title) + '</b><small>' + esc(note) + '</small></div>' +
           '<div class="tut-chips">' + chips.map(function (c) { return foodChipHTML(c.e, c.t, 'ok'); }).join('') + '</div>' +
-          (p.riceNote ? '<p class="note-line">' + esc(p.riceNote) + '</p>' : '') +
+          ((p.mealNote || p.riceNote) ? '<p class="note-line">' + esc(p.mealNote || p.riceNote) + '</p>' : '') +
         '</div>';
       }).join('') +
     '</section>';
@@ -2012,7 +2012,7 @@
   }
 
   function planSheet(d) {
-    var options = ['SHAKE', 'LOW', 'ZERO', 'FAST'];
+    var options = ['SHAKE', 'NORMAL', 'LOW', 'ZERO', 'FAST'];
     var rows = Program.meals.map(function (m) {
       var cur = d.draft[m];
       return '<label class="plan-row"><span>' + Program.mealLabel[m] + '</span>' +
